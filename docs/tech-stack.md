@@ -1,49 +1,69 @@
 # 技术栈定稿
 
 ## 目标
-这份文档用于明确 Tree Knowledge 的 MVP 技术栈，确保前后端、数据库、图谱渲染和 LLM 集成都有统一决策，不在实现阶段反复摇摆。
+这份文档用于明确 Tree Knowledge 的 MVP 技术栈，确保桌面壳、数据层、图谱渲染、本地存储和 LLM Provider 集成都有统一决策，不在实现阶段反复摇摆。
 
 选型原则：
-- 优先单仓快速起步
+- 优先本地优先和单机可运行
 - 优先 TypeScript 全栈一致性
 - 优先成熟稳定生态
 - 图谱可视化轻量实现，不为 MVP 引入图数据库
-- LLM 调用可替换，但默认先接 OpenAI 兼容接口
+- LLM 调用可替换，默认支持多 Provider 适配
+- 不以 Web 部署和服务端托管为前提
 
 ## 总体结论
 MVP 技术栈定为：
 
-- 前端：`Next.js 16.2` + `React 19` + `TypeScript`
-- UI：`Tailwind CSS v4` + `Motion` + `Lucide`
+- 桌面壳：`Electron`
+- 渲染层：`Vite` + `React 19` + `TypeScript`
+- UI：`Tailwind CSS v4` + `Motion` + `Lucide React`
 - 图谱渲染：`React Flow`
-- 后端：`Next.js Route Handlers`
-- 数据库：`PostgreSQL`
+- 本地数据库：`SQLite`
+- SQLite 驱动：`better-sqlite3`
 - ORM：`Drizzle ORM`
 - 校验：`Zod`
-- LLM 接入：`OpenAI API`
-- 缓存 / 队列：MVP 暂不引入 Redis，先用数据库 + 异步任务补偿
-- 部署：`Vercel` + `Neon` 或 `Railway` + `Postgres`
+- 本地配置：`electron-store`
+- 密钥存储：`keytar`
+- LLM 接入：Provider Adapter Layer
+- 打包：`electron-builder`
 - 包管理：`pnpm`
 
-## 1. 前端栈
-### 框架
-选型：`Next.js 16.2`
+## 1. 桌面壳与渲染层
+### 桌面壳
+选型：`Electron`
 
 原因：
-- 适合同时承载首页、工作台和 API
-- App Router 适合页面分层和服务端数据获取
-- 后续接鉴权、流式返回、服务端调用模型都顺手
-- 与 React 19 配合稳定，适合现代交互界面
+- 适合本地优先桌面应用
+- 可以访问本地文件系统、系统目录和安全存储
+- 适合后续做本地导入导出、Provider 配置和桌面分发
+- 用户无需依赖独立浏览器运行
 
 结论：
-- 使用 `App Router`
-- 默认采用 `TypeScript`
-- 页面按 `app/` 结构组织
-- Node.js 运行时最低要求为 `20.9+`
-- 默认采用 `Turbopack`
-- 如需请求前置逻辑，优先按 Next.js 16 的 `proxy` 方向设计，不再围绕旧的 `middleware` 写新能力
+- 使用主进程 + preload + renderer 分层
+- 默认开启 `contextIsolation`
+- 渲染层不直接访问 Node 能力
+- 所有敏感能力通过 preload 暴露白名单 bridge
 
-### UI 层
+### 渲染层
+选型：
+- `Vite`
+- `React 19`
+- `TypeScript`
+
+原因：
+- Electron + Vite 的开发体验成熟
+- 启动快，适合高频 UI 迭代
+- React 生态可继续复用现有工作台和图谱设计
+
+结论：
+- 渲染层采用标准 React 单页结构
+- 桌面应用内主要视图包括：
+  - 启动台
+  - 知识工作台
+  - Provider 管理
+  - 应用设置
+
+## 2. UI 与交互层
 选型：
 - `Tailwind CSS v4`
 - `Motion`
@@ -52,14 +72,14 @@ MVP 技术栈定为：
 原因：
 - 视觉规范已经明确，需要快速落样式令牌和组件层级
 - Tailwind 适合把 `visual-spec.md` 中的 tokens 直接写进系统
-- Motion 足够支撑首页团块呼吸、卡片浮动、工作台切换动画
+- Motion 足够支撑启动台团块呼吸、卡片浮动、工作台切换动画
 - Lucide 适合线性图标语言，和当前视觉方向一致
 
 补充规则：
 - 不引入完整重型组件库作为主 UI 框架
 - 允许后续局部参考 `shadcn/ui` 的无头模式，但不把它当视觉系统
 
-## 2. 图谱渲染
+## 3. 图谱渲染
 选型：`React Flow`
 
 原因：
@@ -70,42 +90,51 @@ MVP 技术栈定为：
 实现策略：
 - MVP 不做自由画布编辑器
 - 只做“可浏览、可切换当前节点、可显示关系”的受控图谱
-- 布局先由后端或前端规则计算，不引入复杂图算法引擎
+- 布局先由主进程或渲染层规则计算，不引入复杂图算法引擎
 
 明确不选：
-- `Cytoscape.js`：功能强，但对 MVP 偏重
-- `D3` 直写：灵活但开发维护成本高
-- 图数据库专用前端：过早优化
+- `Cytoscape.js`
+- `D3` 直写
+- 图数据库专用渲染库
 
-## 3. 后端栈
-### 运行时
-选型：`Next.js Route Handlers`
+## 4. 应用服务层
+### 调用方式
+选型：Electron 主进程服务 + preload bridge
 
 原因：
-- 当前项目规模适合单仓一体化
-- 前后端统一在一个 TypeScript 项目里，减少样板和通信成本
-- API 契约已经稳定，用 Route Handlers 就能直接落地
+- 本地端不需要 HTTP 形式的应用接口作为主通信方式
+- 数据读取、Provider 调用、导入导出和文件访问更适合走进程间调用
+- 能把敏感能力收敛在主进程
 
 结论：
-- API 放在 `app/api/`
-- 先不拆独立服务
-- 后续只有在异步任务、协作和负载明显上升时再拆后端服务
+- 业务命令与查询定义为应用服务方法
+- UI 通过 typed bridge 调用主进程服务
+- 不设计 Web Route 作为主入口
 
-### 请求校验
+### 校验
 选型：`Zod`
 
 原因：
 - 与 TypeScript、Drizzle 配合自然
-- 可直接用于 API 入参和 LLM 输出结构校验
+- 可直接用于命令入参和 LLM 输出结构校验
 
-## 4. 数据层
+## 5. 数据层
 ### 数据库
-选型：`PostgreSQL`
+选型：`SQLite`
 
 原因：
-- 已在产品文档中确定关系型数据库优先
+- 适合单用户、本地优先知识库
 - 节点、层级、关系边、候选记录都适合标准 SQL 建模
-- 后续可逐步补全文搜索、JSON 字段和物化视图
+- 无需先引入独立数据库服务
+- 便于用户备份、迁移和导出
+
+### 驱动
+选型：`better-sqlite3`
+
+原因：
+- 在 Electron 主进程里简单直接
+- 同步调用方式对本地单机应用足够稳定
+- 与 Drizzle 配合成熟
 
 ### ORM
 选型：`Drizzle ORM`
@@ -122,15 +151,24 @@ MVP 技术栈定为：
 - 所有表结构以 `docs/data-model.md` 为真相源
 - schema 变更必须同步文档
 
-## 5. LLM 集成
-### 默认模型接入
-选型：`OpenAI API`
+## 6. LLM 集成
+### Provider 适配层
+选型：自定义 `Provider Adapter Layer`
 
 原因：
-- 当前产品能力和文档都围绕结构化生成、候选生成、摘要压缩
-- OpenAI 生态对 JSON schema、结构化输出和多模型切换更方便
+- 用户希望接入自己的模型提供商
+- 产品需要把“知识结构编排”和“模型供应商”解耦
+- 同一用户可能会为不同任务绑定不同模型
 
-MVP 接口分层：
+MVP 支持的 Provider：
+- `OpenAI`
+- `OpenRouter`
+- `Anthropic`
+- `Gemini`
+- `Ollama`
+- `LM Studio`
+
+MVP 任务分层：
 - `generateRootNode`
 - `generateCandidateNodes`
 - `generateDirectNode`
@@ -138,24 +176,29 @@ MVP 接口分层：
 
 规则：
 - 所有 LLM 返回都必须经过 `Zod` 校验
-- prompt 与 schema 独立成服务层，不散落在路由里
+- prompt 与 schema 独立成服务层，不散落在 UI 组件里
+- 不把任意 Provider 的 SDK 耦合进上层业务逻辑
 
-### SDK
-选型：`openai` 官方 Node SDK
-
-## 6. 鉴权与用户
-MVP 阶段默认单用户优先。
-
+### 凭证存储
 选型：
-- 第一阶段可不做完整鉴权
-- 如果需要登录，首选 `NextAuth/Auth.js`
+- 基础配置：`electron-store`
+- 密钥存储：`keytar`
+
+规则：
+- API Key 不明文写入 SQLite
+- Provider 配置和默认模型映射可序列化保存
+- 敏感凭证优先交给系统 keychain
+
+## 7. 用户与账号
+MVP 阶段默认单用户、本地单实例优先。
 
 结论：
-- 不把鉴权作为第一阶段阻塞项
-- 先把工作区、节点和生成链路打通
+- 第一阶段不做账号体系
+- 不做登录和云同步前置要求
+- 先把知识库、节点、Provider 配置和生成链路打通
 
-## 7. 搜索
-MVP 选型：`Postgres ILIKE / 全文检索`
+## 8. 搜索
+MVP 选型：`SQLite LIKE / FTS`
 
 原因：
 - 当前搜索对象是知识库和节点，量级不大
@@ -163,106 +206,118 @@ MVP 选型：`Postgres ILIKE / 全文检索`
 
 升级路径：
 - MVP：标题 + 摘要 + 路径搜索
-- 后续：Postgres Full-Text Search
+- 后续：SQLite FTS5
 
-## 8. 异步任务
+## 9. 异步任务
 MVP 不单独引入消息队列。
 
 处理方式：
 - 先同步完成核心创建链路
-- 对上下文快照重建等非关键任务，使用应用内异步触发或数据库状态补偿
+- 对上下文快照重建等非关键任务，使用应用内异步触发或本地任务队列补偿
 
 后续如有需要再引入：
-- `Upstash Redis`
-- 或 `Trigger.dev`
+- `PQueue`
+- 或单独本地任务 worker
 
-## 9. 部署与环境
-### 推荐部署
-方案 A：
-- 前端 / API：`Vercel`
-- 数据库：`Neon Postgres`
+## 10. 打包与运行环境
+### 推荐打包
+- macOS / Windows / Linux：`electron-builder`
 
-方案 B：
-- 一体部署：`Railway`
+### 运行环境
+- Node.js 开发环境建议 `20.9+`
+- 桌面应用运行时由 Electron 自带 Node/Chromium
 
-MVP 推荐：
-- 如果追求极简上线，优先 `Vercel + Neon`
-
-### 环境变量
+### 本地配置项
 至少包括：
-- `DATABASE_URL`
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL_CANDIDATE`
-- `OPENAI_MODEL_DIRECT`
-- `OPENAI_MODEL_SUMMARY`
+- 默认知识库存储目录
+- Provider 列表
+- 默认 Provider
+- 默认模型映射：
+  - candidate
+  - direct
+  - summary
 
-## 10. 项目结构建议
+## 11. 项目结构建议
 建议采用以下结构：
 
 ```text
-app/
-  (marketing)/
-  workspace/
-  api/
+electron/
+  main/
+  preload/
+src/
+  views/
+    launchpad/
+    workspace/
+    provider-settings/
+    app-settings/
 components/
   ui/
   workspace/
-  library-home/
+  launchpad/
 lib/
   db/
   llm/
   graph/
+  providers/
   validators/
 drizzle/
 docs/
 ```
 
 说明：
-- `app/(marketing)`：知识库首页或未来轻营销入口
-- `app/workspace`：知识工作台
-- `app/api`：所有 API
+- `electron/main`：应用生命周期、窗口管理、数据库和命令服务
+- `electron/preload`：安全桥接层
+- `src/views/launchpad`：桌面启动台
+- `src/views/workspace`：知识工作台
+- `src/views/provider-settings`：Provider 管理
+- `src/views/app-settings`：应用设置
 - `components/workspace`：图谱、左右栏、输入区
-- `components/library-home`：首页 Hero、总览区、卡片流
+- `components/launchpad`：启动台 Hero、总览区、卡片流
 - `lib/llm`：模型调用和 prompt/schema
+- `lib/providers`：Provider 适配层
 - `lib/db`：Drizzle client 和 query helpers
 
-## 11. 不采用的技术
+## 12. 不采用的技术
 MVP 明确不采用：
 - 图数据库
 - 微服务拆分
-- Electron
+- Next.js
 - React Native
 - Prisma
 - Elasticsearch
 - 重型可视化引擎
 - 传统聊天 UI SDK
 
-## 12. 最终决策摘要
+## 13. 最终决策摘要
 ### 必选
-- `Next.js 16.2`
+- `Electron`
+- `Vite`
 - `React 19`
 - `TypeScript`
 - `Tailwind CSS v4`
 - `Motion`
 - `Lucide React`
 - `React Flow`
-- `PostgreSQL`
+- `SQLite`
+- `better-sqlite3`
 - `Drizzle ORM`
 - `Zod`
-- `openai` SDK
+- `electron-store`
+- `keytar`
+- `electron-builder`
 - `pnpm`
 
 ### 可选后补
-- `Auth.js`
-- `Trigger.dev`
-- `Postgres Full-Text Search`
+- `SQLite FTS5`
+- `PQueue`
+- 本地文件导入器
 
-## 13. 开发顺序建议
-1. 初始化 `Next.js 16.2 + Tailwind + TypeScript + pnpm`
-2. 接入 `Drizzle + Postgres`
+## 14. 开发顺序建议
+1. 初始化 `Electron + Vite + React + TypeScript + pnpm`
+2. 接入 `Drizzle + SQLite`
 3. 落 `workspaces / nodes / node_hierarchy / node_edges`
-4. 搭首页和工作台静态骨架
+4. 搭桌面启动台、工作台和 Provider 设置静态骨架
 5. 接 `React Flow`
-6. 实现节点读取与工作台聚合视图
-7. 接 LLM 服务层
+6. 实现本地命令/查询服务和工作台聚合视图
+7. 接 Provider 适配层和 LLM 服务层
 8. 完成候选生成和直接生成链路
