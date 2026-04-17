@@ -20,7 +20,7 @@
 - 测试规范
 
 当前主技术栈：
-- `Electron`
+- `Tauri`
 - `Vite`
 - `React 19`
 - `TypeScript`
@@ -33,12 +33,12 @@
 
 含义：
 - 先搭底层共用能力，再长上层功能
-- 先稳定 `main / preload / renderer`、数据库、命令/查询桥接、Provider 配置
+- 先稳定 `frontend / Tauri commands`、数据库、命令/查询桥接、Provider 配置
 - 再实现启动台、工作台、图谱和 LLM 主链路
 
 原因：
 - 这是桌面应用，不是纯页面项目
-- `Electron` 分层、`SQLite` 数据层、Provider 配置和本地凭证都属于全局基础设施
+- `Tauri` 分层、`SQLite` 数据层、Provider 配置和本地凭证都属于全局基础设施
 - 如果先按功能切片开发，后续很容易反复重构 bridge、数据访问层和 Provider 配置逻辑
 
 ## 实施顺序
@@ -47,8 +47,8 @@
 - 建立可运行的桌面应用骨架
 
 任务：
-- 初始化 `Electron + Vite + React + TypeScript + pnpm`
-- 建立 `main / preload / renderer` 分层
+- 初始化 `Tauri + Vite + React + TypeScript + pnpm`
+- 建立 `frontend / src-tauri` 分层
 - 接入 `Tailwind CSS v4`
 - 接入 `Lucide React`
 - 接入 `Motion`
@@ -56,8 +56,8 @@
 
 完成标准：
 - 应用可本地启动
-- 渲染层可正常显示基础视图
-- preload bridge 可调用一个最小示例命令
+- 前端可正常显示基础视图
+- Tauri command wrapper 可调用一个最小示例命令
 
 ### Phase 2：数据层
 目标：
@@ -73,7 +73,7 @@
 完成标准：
 - 可创建数据库
 - 可运行迁移
-- 可通过主进程读写核心表
+- 可通过 Tauri command 层读写核心表
 
 ### Phase 3：Provider 配置
 目标：
@@ -82,8 +82,8 @@
 任务：
 - 建立 Provider Adapter Layer
 - 仅支持 `OpenAI 格式兼容接口`
-- 接入 `electron-store`
-- 接入 `keytar`
+- 接入本地配置存储
+- 接入系统 keychain
 - 完成 Provider 管理视图
 - 完成连通性测试命令
 

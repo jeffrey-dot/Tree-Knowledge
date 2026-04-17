@@ -14,49 +14,49 @@
 ## 总体结论
 MVP 技术栈定为：
 
-- 桌面壳：`Electron`
-- 渲染层：`Vite` + `React 19` + `TypeScript`
+- 桌面壳：`Tauri`
+- 前端：`Vite` + `React 19` + `TypeScript`
 - UI：`Tailwind CSS v4` + `Motion` + `Lucide React`
 - 图谱渲染：`React Flow`
 - 本地数据库：`SQLite`
-- SQLite 驱动：`better-sqlite3`
+- 数据访问：Rust `rusqlite`
 - ORM：`Drizzle ORM`
 - 校验：`Zod`
-- 本地配置：`electron-store`
-- 密钥存储：`keytar`
+- 本地配置：Tauri store 插件或本地配置文件
+- 密钥存储：系统 keychain
 - LLM 接入：Provider Adapter Layer
-- 打包：`electron-builder`
+- 打包：`Tauri bundler`
 - 包管理：`pnpm`
 
-## 1. 桌面壳与渲染层
+## 1. 桌面壳与前端层
 ### 桌面壳
-选型：`Electron`
+选型：`Tauri`
 
 原因：
 - 适合本地优先桌面应用
 - 可以访问本地文件系统、系统目录和安全存储
+- 安装包更轻，运行时开销更低
 - 适合后续做本地导入导出、Provider 配置和桌面分发
-- 用户无需依赖独立浏览器运行
 
 结论：
-- 使用主进程 + preload + renderer 分层
-- 默认开启 `contextIsolation`
-- 渲染层不直接访问 Node 能力
-- 所有敏感能力通过 preload 暴露白名单 bridge
+- 使用 `frontend + src-tauri` 分层
+- 前端不直接持有文件系统、数据库和密钥存储能力
+- 所有敏感能力通过 `Tauri commands` 暴露白名单接口
+- 默认按最小权限原则配置 capability
 
-### 渲染层
+### 前端
 选型：
 - `Vite`
 - `React 19`
 - `TypeScript`
 
 原因：
-- Electron + Vite 的开发体验成熟
+- Tauri + Vite 的桌面开发链路成熟
 - 启动快，适合高频 UI 迭代
 - React 生态可继续复用现有工作台和图谱设计
 
 结论：
-- 渲染层采用标准 React 单页结构
+- 前端采用标准 React 单页结构
 - 桌面应用内主要视图包括：
   - 启动台
   - 知识工作台
@@ -90,7 +90,7 @@ MVP 技术栈定为：
 实现策略：
 - MVP 不做自由画布编辑器
 - 只做“可浏览、可切换当前节点、可显示关系”的受控图谱
-- 布局先由主进程或渲染层规则计算，不引入复杂图算法引擎
+- 布局先由 Tauri command 层或前端规则计算，不引入复杂图算法引擎
 
 明确不选：
 - `Cytoscape.js`
@@ -99,16 +99,16 @@ MVP 技术栈定为：
 
 ## 4. 应用服务层
 ### 调用方式
-选型：Electron 主进程服务 + preload bridge
+选型：Tauri command layer
 
 原因：
 - 本地端不需要 HTTP 形式的应用接口作为主通信方式
-- 数据读取、Provider 调用、导入导出和文件访问更适合走进程间调用
-- 能把敏感能力收敛在主进程
+- 数据读取、Provider 调用、导入导出和文件访问更适合走本地命令调用
+- 能把敏感能力收敛在 Rust 后端
 
 结论：
 - 业务命令与查询定义为应用服务方法
-- UI 通过 typed bridge 调用主进程服务
+- UI 通过 typed command wrapper 调用 Tauri 服务
 - 不设计 Web Route 作为主入口
 
 ### 校验
@@ -128,13 +128,13 @@ MVP 技术栈定为：
 - 无需先引入独立数据库服务
 - 便于用户备份、迁移和导出
 
-### 驱动
-选型：`better-sqlite3`
+### 访问方式
+选型：Rust `rusqlite`
 
 原因：
-- 在 Electron 主进程里简单直接
-- 同步调用方式对本地单机应用足够稳定
-- 与 Drizzle 配合成熟
+- 在 Tauri command 层里直接访问 SQLite 更自然
+- 不需要在前端侧持有 Node 原生模块
+- 适合把数据库能力和本地文件访问一起收敛到 Rust 后端
 
 ### ORM
 选型：`Drizzle ORM`
@@ -179,8 +179,8 @@ MVP 任务分层：
 
 ### 凭证存储
 选型：
-- 基础配置：`electron-store`
-- 密钥存储：`keytar`
+- 基础配置：Tauri store 插件或本地配置文件
+- 密钥存储：系统 keychain
 
 规则：
 - API Key 不明文写入 SQLite
@@ -232,11 +232,11 @@ MVP 不单独引入消息队列。
 
 ## 10. 打包与运行环境
 ### 推荐打包
-- macOS / Windows / Linux：`electron-builder`
+- macOS / Windows / Linux：`Tauri bundler`
 
 ### 运行环境
 - Node.js 开发环境建议 `20.9+`
-- 桌面应用运行时由 Electron 自带 Node/Chromium
+- Rust 工具链用于 Tauri 后端构建
 
 ### 本地配置项
 至少包括：
@@ -252,9 +252,6 @@ MVP 不单独引入消息队列。
 建议采用以下结构：
 
 ```text
-electron/
-  main/
-  preload/
 src/
   views/
     launchpad/
@@ -272,12 +269,15 @@ lib/
   providers/
   validators/
 drizzle/
+src-tauri/
+  src/
+  capabilities/
 docs/
 ```
 
 说明：
-- `electron/main`：应用生命周期、窗口管理、数据库和命令服务
-- `electron/preload`：安全桥接层
+- `src-tauri/src`：应用生命周期、命令层、数据库和 Provider 服务
+- `src-tauri/capabilities`：Tauri 能力边界与权限配置
 - `src/views/launchpad`：桌面启动台
 - `src/views/workspace`：知识工作台
 - `src/views/provider-settings`：Provider 管理
@@ -286,7 +286,7 @@ docs/
 - `components/launchpad`：启动台 Hero、总览区、卡片流
 - `lib/llm`：模型调用和 prompt/schema
 - `lib/providers`：OpenAI-compatible Provider 适配层
-- `lib/db`：Drizzle client 和 query helpers
+- `lib/db`：Drizzle schema 和 query helpers
 
 ## 12. 不采用的技术
 MVP 明确不采用：
@@ -298,10 +298,11 @@ MVP 明确不采用：
 - Elasticsearch
 - 重型可视化引擎
 - 传统聊天 UI SDK
+- Electron
 
 ## 13. 最终决策摘要
 ### 必选
-- `Electron`
+- `Tauri`
 - `Vite`
 - `React 19`
 - `TypeScript`
@@ -310,12 +311,12 @@ MVP 明确不采用：
 - `Lucide React`
 - `React Flow`
 - `SQLite`
-- `better-sqlite3`
+- `rusqlite`
 - `Drizzle ORM`
 - `Zod`
-- `electron-store`
-- `keytar`
-- `electron-builder`
+- Tauri store 插件
+- 系统 keychain 集成
+- `Tauri bundler`
 - `pnpm`
 
 ### 可选后补
@@ -325,11 +326,12 @@ MVP 明确不采用：
 - 非 OpenAI 兼容 Provider 适配
 
 ## 14. 开发顺序建议
-1. 初始化 `Electron + Vite + React + TypeScript + pnpm`
-2. 接入 `Drizzle + SQLite`
-3. 落 `workspaces / nodes / node_hierarchy / node_edges`
-4. 搭桌面启动台、工作台和 Provider 设置静态骨架
-5. 接 `React Flow`
-6. 实现本地命令/查询服务和工作台聚合视图
-7. 接 Provider 适配层和 LLM 服务层
-8. 完成候选生成和直接生成链路
+1. 初始化 `Tauri + Vite + React + TypeScript + pnpm`
+2. 建立前端层与 Tauri command 层边界
+3. 接入 `SQLite`
+4. 落 `workspaces / nodes / node_hierarchy / node_edges`
+5. 搭桌面启动台、工作台和 Provider 设置静态骨架
+6. 接 `React Flow`
+7. 实现本地命令/查询服务和工作台聚合视图
+8. 接 Provider 适配层和 LLM 服务层
+9. 完成候选生成和直接生成链路
