@@ -246,9 +246,14 @@ Tree Knowledge 的桌面应用视图结构必须服务于一个核心原则：
 - 新增 Provider
 - Base URL
 - API Key
-- Model 列表
+- Default Model
 - 测试连接
 - 默认模型绑定
+
+### 规则
+- MVP 只支持 `OpenAI 格式兼容配置`
+- Provider 表单字段固定，不做厂商专属动态表单
+- 任何兼容 OpenAI 接口的服务都通过同一表单接入
 
 ## 9. 图谱全览页
 ### 定位

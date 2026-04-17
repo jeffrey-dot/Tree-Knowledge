@@ -8,7 +8,7 @@
 - 优先 TypeScript 全栈一致性
 - 优先成熟稳定生态
 - 图谱可视化轻量实现，不为 MVP 引入图数据库
-- LLM 调用可替换，默认支持多 Provider 适配
+- LLM 调用可替换，但 Provider 配置格式先统一为 OpenAI 兼容格式
 - 不以 Web 部署和服务端托管为前提
 
 ## 总体结论
@@ -153,20 +153,17 @@ MVP 技术栈定为：
 
 ## 6. LLM 集成
 ### Provider 适配层
-选型：自定义 `Provider Adapter Layer`
+选型：自定义 `OpenAI-Compatible Provider Adapter Layer`
 
 原因：
 - 用户希望接入自己的模型提供商
 - 产品需要把“知识结构编排”和“模型供应商”解耦
-- 同一用户可能会为不同任务绑定不同模型
+- 当前阶段不希望为不同厂商维护多套请求格式
+- 只要 Provider 提供 OpenAI 兼容接口，就能接入
 
-MVP 支持的 Provider：
-- `OpenAI`
-- `OpenRouter`
-- `Anthropic`
-- `Gemini`
-- `Ollama`
-- `LM Studio`
+MVP 支持范围：
+- `OpenAI` 官方接口
+- 任何 `OpenAI-compatible` 服务
 
 MVP 任务分层：
 - `generateRootNode`
@@ -177,7 +174,8 @@ MVP 任务分层：
 规则：
 - 所有 LLM 返回都必须经过 `Zod` 校验
 - prompt 与 schema 独立成服务层，不散落在 UI 组件里
-- 不把任意 Provider 的 SDK 耦合进上层业务逻辑
+- 不把任意厂商 SDK 耦合进上层业务逻辑
+- 所有 Provider 请求统一走 OpenAI 兼容请求结构
 
 ### 凭证存储
 选型：
@@ -188,6 +186,19 @@ MVP 任务分层：
 - API Key 不明文写入 SQLite
 - Provider 配置和默认模型映射可序列化保存
 - 敏感凭证优先交给系统 keychain
+
+### Provider 配置字段
+MVP 固定 Provider 配置字段为：
+- `name`
+- `base_url`
+- `api_key`
+- `default_model`
+- `enabled`
+
+不支持：
+- 厂商专有字段分支
+- 多种鉴权模式
+- 非 OpenAI 兼容的消息格式
 
 ## 7. 用户与账号
 MVP 阶段默认单用户、本地单实例优先。
@@ -274,7 +285,7 @@ docs/
 - `components/workspace`：图谱、左右栏、输入区
 - `components/launchpad`：启动台 Hero、总览区、卡片流
 - `lib/llm`：模型调用和 prompt/schema
-- `lib/providers`：Provider 适配层
+- `lib/providers`：OpenAI-compatible Provider 适配层
 - `lib/db`：Drizzle client 和 query helpers
 
 ## 12. 不采用的技术
@@ -311,6 +322,7 @@ MVP 明确不采用：
 - `SQLite FTS5`
 - `PQueue`
 - 本地文件导入器
+- 非 OpenAI 兼容 Provider 适配
 
 ## 14. 开发顺序建议
 1. 初始化 `Electron + Vite + React + TypeScript + pnpm`

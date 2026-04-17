@@ -8,6 +8,7 @@
 - 桌面应用优先
 - 用户自带 LLM Provider
 - 节点驱动的知识工作台
+- Provider 配置仅支持 OpenAI 格式兼容接口
 
 ## 当前基线
 已完成：
@@ -26,6 +27,19 @@
 - `SQLite`
 - `Drizzle ORM`
 - `React Flow`
+
+## 开发策略
+当前开发顺序明确采用 `Horizontal Layers`，不采用 `Vertical Slices`。
+
+含义：
+- 先搭底层共用能力，再长上层功能
+- 先稳定 `main / preload / renderer`、数据库、命令/查询桥接、Provider 配置
+- 再实现启动台、工作台、图谱和 LLM 主链路
+
+原因：
+- 这是桌面应用，不是纯页面项目
+- `Electron` 分层、`SQLite` 数据层、Provider 配置和本地凭证都属于全局基础设施
+- 如果先按功能切片开发，后续很容易反复重构 bridge、数据访问层和 Provider 配置逻辑
 
 ## 实施顺序
 ### Phase 1：项目骨架
@@ -67,7 +81,7 @@
 
 任务：
 - 建立 Provider Adapter Layer
-- 支持 `OpenAI / OpenRouter / Anthropic / Gemini / Ollama / LM Studio`
+- 仅支持 `OpenAI 格式兼容接口`
 - 接入 `electron-store`
 - 接入 `keytar`
 - 完成 Provider 管理视图
@@ -77,6 +91,7 @@
 - 用户可新增 Provider
 - 用户可测试连接
 - 用户可设置默认模型映射
+- Provider 配置字段固定为 OpenAI 兼容格式
 
 ### Phase 4：启动台
 目标：
@@ -166,6 +181,7 @@
 - 桌面应用骨架不定，其他工作没有落点
 - 数据层不定，工作台和图谱无法落地
 - Provider 不定，LLM 主链路无法验证
+- Horizontal Layers 能减少后续重构成本
 
 ## 执行要求
 - 每完成一个 Phase，都要同步更新文档
