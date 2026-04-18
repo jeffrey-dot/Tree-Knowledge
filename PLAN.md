@@ -64,11 +64,10 @@
 - 建立本地数据库和核心数据模型
 
 任务：
-- 接入 `better-sqlite3`
-- 接入 `Drizzle ORM`
+- 接入 Rust `rusqlite`
+- 建立 schema bootstrap 与测试数据库方案
 - 落地 `workspaces / nodes / node_hierarchy / node_edges / node_context_snapshots / node_generation_candidates`
-- 建立迁移流程
-- 建立测试数据库方案
+- 补齐工作台聚合查询
 
 完成标准：
 - 可创建数据库
