@@ -45,7 +45,7 @@ async fn generate_root_node(
     let llm = LlmService::new(provider);
     let result = llm.generate_root_node(&question).await?;
     
-    let (node, workspace_name) = {
+    let (node, _workspace_name) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         
         // 1. Rename the workspace to the AI-generated title

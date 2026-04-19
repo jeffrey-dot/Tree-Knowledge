@@ -1,0 +1,19 @@
+[[permission]]
+identifier = "allow-all-commands"
+description = "Allows all custom commands"
+commands.allow = [
+    "list_workspaces",
+    "create_workspace",
+    "get_workspace_snapshot",
+    "list_providers",
+    "create_provider",
+    "generate_root_node",
+    "expand_node_with_ai",
+    "update_node",
+    "generate_candidates",
+    "accept_candidate",
+    "create_edge",
+    "delete_edge",
+    "search_nodes",
+    "get_full_graph"
+]
