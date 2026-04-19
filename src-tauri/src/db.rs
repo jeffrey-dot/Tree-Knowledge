@@ -199,6 +199,15 @@ impl DbManager {
         })
     }
 
+    pub fn update_workspace_name(&self, id: Uuid, name: String) -> Result<()> {
+        let now = Utc::now();
+        self.conn.execute(
+            "UPDATE workspaces SET name = ?1, updated_at = ?2 WHERE id = ?3",
+            (&name, &now, &id.to_string()),
+        )?;
+        Ok(())
+    }
+
     pub fn create_node(&self, input: CreateNodeInput) -> Result<Node> {
         let id = Uuid::new_v4();
         let now = Utc::now();

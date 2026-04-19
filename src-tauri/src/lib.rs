@@ -45,17 +45,24 @@ async fn generate_root_node(
     let llm = LlmService::new(provider);
     let result = llm.generate_root_node(&question).await?;
     
-    let node = {
+    let (node, workspace_name) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.create_node(CreateNodeInput {
+        
+        // 1. Rename the workspace to the AI-generated title
+        db.update_workspace_name(workspace_id, result.title.clone()).map_err(|e| e.to_string())?;
+
+        // 2. Create the root node
+        let n = db.create_node(CreateNodeInput {
             workspace_id,
-            title: result.title,
+            title: result.title.clone(),
             summary: Some(result.summary),
             body: Some(result.body),
             parent_node_id: None,
             status: "confirmed".to_string(),
             created_by_type: "ai".to_string(),
-        }).map_err(|e: rusqlite::Error| e.to_string())?
+        }).map_err(|e: rusqlite::Error| e.to_string())?;
+
+        (n, result.title)
     };
 
     Ok(node)
