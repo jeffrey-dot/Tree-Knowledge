@@ -60,11 +60,12 @@ export default function Launchpad({
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to permanently delete this theme? This cannot be undone.")) return;
+    if (!window.confirm("Are you sure you want to permanently delete this theme? This cannot be undone.")) return;
     try {
       await invoke("delete_workspace", { id });
       await loadWorkspaces();
     } catch (error) {
+      console.error("Delete failed:", error);
       alert(error);
     }
   };
