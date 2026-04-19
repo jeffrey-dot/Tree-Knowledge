@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Settings, Plus, Sparkles, Loader2 } from "lucide-react";
+import { Settings, Sparkles, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Workspace {
@@ -21,7 +21,6 @@ export default function Launchpad({
 }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [isCreating, setIsCreating] = useState(false);
-  const [newName, setNewName] = useState("");
   const [initialQuestion, setInitialQuestion] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -68,13 +67,11 @@ export default function Launchpad({
     <div 
       className="min-h-screen bg-white overflow-hidden relative"
       onDoubleClick={(e) => {
-        // Prevent triggering when clicking on buttons or modal
         if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'MAIN') {
           setIsCreating(true);
         }
       }}
     >
-      {/* Background Decor */}
       <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:32px_32px] opacity-40 pointer-events-none" />
       
       <header className="absolute top-0 left-0 right-0 p-8 flex justify-between items-center z-10">
@@ -140,7 +137,6 @@ export default function Launchpad({
         )}
       </main>
 
-      {/* Simplified Creation Modal */}
       <AnimatePresence>
         {isCreating && (
           <div className="fixed inset-0 flex items-center justify-center z-50 p-6">

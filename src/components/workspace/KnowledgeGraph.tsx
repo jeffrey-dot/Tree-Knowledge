@@ -6,8 +6,9 @@ import {
   useNodesState, 
   useEdgesState,
   Edge,
-  Node as FlowNode,
-  MarkerType
+  Node,
+  MarkerType,
+  BackgroundVariant
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { KnowledgeNode } from "./KnowledgeNode";
@@ -47,11 +48,11 @@ export default function KnowledgeGraph({
   allNodes,
   onNodeClick 
 }: KnowledgeGraphProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [flowEdges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [flowEdges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   useEffect(() => {
-    const newNodes: FlowNode[] = [];
+    const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
     const centerX = 400;
     const centerY = 300;
@@ -133,7 +134,7 @@ export default function KnowledgeGraph({
         nodeTypes={nodeTypes}
         fitView
       >
-        <Background color="#f1f5f9" variant={MarkerType.Circle} />
+        <Background color="#f1f5f9" variant={BackgroundVariant.Dots} />
         <Controls />
       </ReactFlow>
     </div>
