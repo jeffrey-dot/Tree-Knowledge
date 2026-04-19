@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { 
   ReactFlow, 
   Background, 
-  Controls, 
   useNodesState, 
   useEdgesState,
   Edge,
@@ -58,9 +57,8 @@ export default function KnowledgeGraph({
     const centerY = 300;
 
     if (allNodes && allNodes.length > 0) {
-      // Global View Layout: Simple Grid for MVP
       const cols = Math.ceil(Math.sqrt(allNodes.length));
-      const gap = 250;
+      const gap = 300;
       
       allNodes.forEach((node, index) => {
         const row = Math.floor(index / cols);
@@ -74,9 +72,8 @@ export default function KnowledgeGraph({
         });
       });
     } else if (currentNode) {
-      // Focus View Layout
-      const vertGap = 180;
-      const horizGap = 220;
+      const vertGap = 250;
+      const horizGap = 350;
 
       newNodes.push({
         id: currentNode.id,
@@ -115,16 +112,13 @@ export default function KnowledgeGraph({
         target: edge.to_node_id,
         type: "smoothstep",
         animated: !isHierarchy,
-        interactionWidth: 20,
         style: { 
-          stroke: isHierarchy ? "rgba(255,255,255,0.08)" : "rgba(96,165,250,0.4)", 
+          stroke: isHierarchy ? "rgba(255,255,255,0.05)" : "rgba(59,130,246,0.3)", 
           strokeWidth: isHierarchy ? 1 : 2,
         },
         markerEnd: { 
           type: MarkerType.ArrowClosed, 
-          color: isHierarchy ? "rgba(255,255,255,0.08)" : "rgba(96,165,250,0.4)",
-          width: 20,
-          height: 20,
+          color: isHierarchy ? "rgba(255,255,255,0.05)" : "rgba(59,130,246,0.3)",
         },
       });
     });
@@ -143,9 +137,14 @@ export default function KnowledgeGraph({
         onNodeClick={(_, node) => onNodeClick(node.id)}
         nodeTypes={nodeTypes}
         fitView
+        colorMode="dark"
       >
-        <Background color="#f1f5f9" variant={BackgroundVariant.Dots} />
-        <Controls />
+        <Background 
+          color="rgba(255,255,255,0.03)" 
+          variant={BackgroundVariant.Dots} 
+          gap={32}
+          size={1}
+        />
       </ReactFlow>
     </div>
   );
