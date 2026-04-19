@@ -4,35 +4,39 @@ import { motion } from "framer-motion";
 export function KnowledgeNode({ data, selected }: { data: any, selected?: boolean }) {
   return (
     <motion.div 
-      initial={{ scale: 0.9, opacity: 0 }}
+      initial={{ scale: 0.8, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      className={`px-6 py-5 rounded-[2rem] border-2 transition-all w-[240px] bg-white relative ${
+      className={`px-8 py-6 rounded-[2.5rem] border-2 transition-all w-[280px] relative backdrop-blur-2xl ${
         selected 
-          ? 'border-black shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-8 ring-black/5' 
-          : 'border-gray-100 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:border-gray-200'
+          ? 'bg-white/20 border-white/40 shadow-[0_0_50px_rgba(255,255,255,0.1)]' 
+          : 'bg-neutral-900/40 border-white/5 hover:border-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.3)]'
       }`}
     >
       <Handle 
         type="target" 
         position={Position.Top} 
-        className="w-3 h-3 !bg-gray-100 border-2 border-white shadow-sm" 
+        className="w-2 h-2 !bg-white/20 border-none" 
       />
       
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <span className="text-[8px] font-black text-blue-500 uppercase tracking-[0.2em]">
+          <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${selected ? 'text-blue-400' : 'text-gray-500'}`}>
             {data.status}
           </span>
           {selected && (
-            <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
+            <motion.div 
+              animate={{ opacity: [0.4, 1, 0.4] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_#60a5fa]" 
+            />
           )}
         </div>
         
-        <h3 className="text-xs font-black text-gray-900 uppercase tracking-tight leading-tight line-clamp-2">
+        <h3 className="text-sm font-black text-white uppercase tracking-tight leading-tight line-clamp-2">
           {data.label}
         </h3>
         
-        <p className="text-[10px] text-gray-400 font-medium line-clamp-2 leading-relaxed">
+        <p className="text-[11px] text-gray-400 font-medium line-clamp-2 leading-relaxed opacity-70">
           {data.summary}
         </p>
       </div>
@@ -40,7 +44,7 @@ export function KnowledgeNode({ data, selected }: { data: any, selected?: boolea
       <Handle 
         type="source" 
         position={Position.Bottom} 
-        className="w-3 h-3 !bg-gray-100 border-2 border-white shadow-sm" 
+        className="w-2 h-2 !bg-white/20 border-none" 
       />
     </motion.div>
   );

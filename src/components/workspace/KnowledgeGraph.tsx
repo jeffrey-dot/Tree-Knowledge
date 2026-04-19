@@ -108,14 +108,24 @@ export default function KnowledgeGraph({
     }
 
     edges.forEach(edge => {
+      const isHierarchy = edge.relation_type === "hierarchy";
       newEdges.push({
         id: edge.id,
         source: edge.from_node_id,
         target: edge.to_node_id,
-        label: edge.relation_type === "hierarchy" ? "" : edge.relation_type,
-        animated: edge.relation_type !== "hierarchy",
-        style: { stroke: edge.relation_type === "hierarchy" ? "#cbd5e1" : "#3b82f6", strokeWidth: 2 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: edge.relation_type === "hierarchy" ? "#cbd5e1" : "#3b82f6" },
+        type: "smoothstep",
+        animated: !isHierarchy,
+        interactionWidth: 20,
+        style: { 
+          stroke: isHierarchy ? "rgba(255,255,255,0.08)" : "rgba(96,165,250,0.4)", 
+          strokeWidth: isHierarchy ? 1 : 2,
+        },
+        markerEnd: { 
+          type: MarkerType.ArrowClosed, 
+          color: isHierarchy ? "rgba(255,255,255,0.08)" : "rgba(96,165,250,0.4)",
+          width: 20,
+          height: 20,
+        },
       });
     });
 
