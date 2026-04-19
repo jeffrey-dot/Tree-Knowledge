@@ -81,3 +81,154 @@ body {
   background: rgba(59, 130, 246, 0.05) !important;
   border: 1px solid rgba(59, 130, 246, 0.2) !important;
 }
+
+.knowledge-wall::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.012) 0,
+      rgba(255, 255, 255, 0.012) 1px,
+      transparent 1px,
+      transparent 120px
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%);
+  opacity: 0.7;
+}
+
+.knowledge-wall-flow .react-flow__pane {
+  cursor: grab;
+}
+
+.knowledge-wall-flow .react-flow__pane:active {
+  cursor: grabbing;
+}
+
+.knowledge-wall-flow .react-flow__edge-path {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.06));
+}
+
+.md-preview {
+  color: inherit;
+}
+
+.md-preview > :first-child {
+  margin-top: 0;
+}
+
+.md-preview > :last-child {
+  margin-bottom: 0;
+}
+
+.md-preview h1,
+.md-preview h2,
+.md-preview h3,
+.md-preview h4,
+.md-preview h5,
+.md-preview h6 {
+  margin: 1.1em 0 0.55em;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #fff;
+}
+
+.md-preview h1 {
+  font-size: 1.65rem;
+}
+
+.md-preview h2 {
+  font-size: 1.4rem;
+}
+
+.md-preview h3 {
+  font-size: 1.2rem;
+}
+
+.md-preview p,
+.md-preview ul,
+.md-preview ol,
+.md-preview blockquote,
+.md-preview pre,
+.md-preview hr {
+  margin: 0.8em 0;
+}
+
+.md-preview ul,
+.md-preview ol {
+  padding-left: 1.35rem;
+}
+
+.md-preview li + li {
+  margin-top: 0.35rem;
+}
+
+.md-preview blockquote {
+  border-left: 2px solid rgba(96, 165, 250, 0.45);
+  padding-left: 0.9rem;
+  color: rgba(231, 229, 228, 0.82);
+}
+
+.md-preview code {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 0.5rem;
+  padding: 0.12rem 0.35rem;
+  font-size: 0.92em;
+  font-family: "SFMono-Regular", "SF Mono", Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.md-preview .md-code-block {
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(3, 7, 18, 0.92);
+  border-radius: 1.15rem;
+  padding: 1rem;
+}
+
+.md-preview .md-code-block code {
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  display: block;
+  white-space: pre;
+}
+
+.md-preview .md-code-lang {
+  margin-bottom: 0.65rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(147, 197, 253, 0.85);
+}
+
+.md-preview a {
+  color: #93c5fd;
+  text-decoration: none;
+}
+
+.md-preview a:hover {
+  color: #bfdbfe;
+  text-decoration: underline;
+}
+
+.md-preview hr {
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.md-preview strong {
+  color: #fff;
+}
+
+.md-preview em {
+  color: rgba(245, 245, 244, 0.88);
+}
+
+.md-preview del {
+  color: rgba(168, 162, 158, 0.85);
+}

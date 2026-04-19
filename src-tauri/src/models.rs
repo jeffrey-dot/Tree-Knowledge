@@ -125,3 +125,9 @@ pub struct FullGraph {
     pub nodes: Vec<Node>,
     pub edges: Vec<NodeEdge>,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeleteNodeResult {
+    pub deleted_workspace: bool,
+    pub next_node_id: Option<Uuid>,
+}

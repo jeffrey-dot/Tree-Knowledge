@@ -1,7 +1,10 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Settings, Sparkles, Loader2, Compass, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { isLlmStreamEvent } from "../../lib/llmStream";
+import StructuredStreamPreview from "../../components/llm/StructuredStreamPreview";
 
 interface Workspace {
   id: string;
@@ -21,11 +24,66 @@ export default function Launchpad({
 }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(null);
+  const [pendingDeleteWorkspaceId, setPendingDeleteWorkspaceId] = useState<string | null>(null);
   const [initialQuestion, setInitialQuestion] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [streamPreview, setStreamPreview] = useState("");
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const streamRequestIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     loadWorkspaces();
+  }, []);
+
+  useEffect(() => {
+    if (!pendingDeleteWorkspaceId) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setPendingDeleteWorkspaceId((current) => current === pendingDeleteWorkspaceId ? null : current);
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [pendingDeleteWorkspaceId]);
+
+  useEffect(() => {
+    let isMounted = true;
+    let unlisten: (() => void) | null = null;
+
+    const setup = async () => {
+      unlisten = await listen<unknown>("llm-stream", (event) => {
+        const payload = event.payload;
+        if (!isLlmStreamEvent(payload) || payload.request_id !== streamRequestIdRef.current) {
+          return;
+        }
+
+        if (payload.stage === "delta" && payload.content) {
+          setStreamPreview((current) => current + payload.content);
+          return;
+        }
+
+        if (payload.stage === "error" && payload.error) {
+          setStreamError(payload.error);
+        }
+      });
+
+      if (!isMounted && unlisten) {
+        unlisten();
+      }
+    };
+
+    void setup();
+
+    return () => {
+      isMounted = false;
+      if (unlisten) {
+        unlisten();
+      }
+    };
   }, []);
 
   const loadWorkspaces = async () => {
@@ -39,34 +97,53 @@ export default function Launchpad({
 
   const handleCreate = async () => {
     if (!initialQuestion.trim()) return;
+
+    const requestId = crypto.randomUUID();
+    streamRequestIdRef.current = requestId;
+    setStreamPreview("");
+    setStreamError(null);
     setIsProcessing(true);
+
     try {
       const ws = await invoke<Workspace>("create_workspace", {
         input: { name: "New Spark...", description: null }
       });
+
       await invoke("generate_root_node", {
         workspaceId: ws.id,
-        question: initialQuestion
+        question: initialQuestion,
+        requestId
       });
-      await loadWorkspaces();
+
       setIsCreating(false);
       setInitialQuestion("");
+      onEnterWorkspace(ws.id);
     } catch (error) {
       alert(error);
     } finally {
+      streamRequestIdRef.current = null;
       setIsProcessing(false);
     }
   };
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!window.confirm("Are you sure you want to permanently delete this theme? This cannot be undone.")) return;
+    if (pendingDeleteWorkspaceId !== id) {
+      setPendingDeleteWorkspaceId(id);
+      return;
+    }
+
+    setPendingDeleteWorkspaceId(null);
+    setDeletingWorkspaceId(id);
     try {
       await invoke("delete_workspace", { id });
-      await loadWorkspaces();
+      setWorkspaces((current) => current.filter((workspace) => workspace.id !== id));
     } catch (error) {
       console.error("Delete failed:", error);
       alert(error);
+      await loadWorkspaces();
+    } finally {
+      setDeletingWorkspaceId((current) => (current === id ? null : current));
     }
   };
 
@@ -152,9 +229,21 @@ export default function Launchpad({
                   {/* Minimal Delete Button */}
                   <button
                     onClick={(e) => handleDelete(e, ws.id)}
-                    className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all scale-75 group-hover:scale-100 z-30 shadow-lg"
+                    disabled={deletingWorkspaceId === ws.id}
+                    title={pendingDeleteWorkspaceId === ws.id ? "再次点击确认删除" : "删除主题"}
+                    className={`absolute -top-3 -right-3 min-w-10 h-10 rounded-full border flex items-center justify-center transition-all z-30 shadow-lg disabled:opacity-100 ${
+                      pendingDeleteWorkspaceId === ws.id
+                        ? "px-3 bg-red-500 text-white border-red-500 opacity-100 scale-100"
+                        : "w-10 bg-black/70 border-red-500/30 text-red-400 opacity-100 group-hover:bg-red-500 group-hover:text-white group-hover:border-red-500"
+                    }`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    {deletingWorkspaceId === ws.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : pendingDeleteWorkspaceId === ws.id ? (
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em]">Delete</span>
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </motion.div>
@@ -188,7 +277,11 @@ export default function Launchpad({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsCreating(false)}
+              onClick={() => {
+                if (!isProcessing) {
+                  setIsCreating(false);
+                }
+              }}
               className="absolute inset-0 bg-black/80 backdrop-blur-xl" 
             />
             <motion.div 
@@ -218,6 +311,22 @@ export default function Launchpad({
                       Input Stream
                     </div>
                   </div>
+
+                  {(isProcessing || streamPreview || streamError) && (
+                    <div className="rounded-[2rem] border border-blue-500/20 bg-blue-500/5 p-6">
+                      <div className="mb-4 flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.3em] text-blue-300">
+                        <div className="h-2 w-2 rounded-full bg-blue-400 shadow-[0_0_12px_#60a5fa]" />
+                        Live Model Stream
+                      </div>
+                      <div className="max-h-48 overflow-y-auto custom-scrollbar rounded-[1.5rem] bg-black/30 px-5 py-4">
+                        <StructuredStreamPreview
+                          rawPreview={streamPreview}
+                          error={streamError}
+                          waitingMessage="Waiting for the first streamed tokens..."
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-4 mt-12">

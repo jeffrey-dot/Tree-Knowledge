@@ -8,9 +8,9 @@ use db::DbManager;
 use models::{
     Workspace, CreateWorkspaceInput, Node, CreateNodeInput, 
     WorkspaceSnapshot, LlmProvider, CreateProviderInput, NodeUpdateInput,
-    NodeCandidate, FullGraph
+    NodeCandidate, FullGraph, DeleteNodeResult
 };
-use llm::LlmService;
+use llm::{LlmService, LlmStreamTarget};
 use uuid::Uuid;
 
 struct AppState {
@@ -31,9 +31,11 @@ async fn create_provider(state: State<'_, AppState>, input: CreateProviderInput)
 
 #[tauri::command]
 async fn generate_root_node(
+    app: tauri::AppHandle,
     state: State<'_, AppState>, 
     workspace_id: Uuid, 
-    question: String
+    question: String,
+    request_id: Option<String>,
 ) -> Result<Node, String> {
     let provider = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -43,7 +45,14 @@ async fn generate_root_node(
     };
     
     let llm = LlmService::new(provider);
-    let result = llm.generate_root_node(&question).await?;
+    let stream_target = request_id.map(|id| LlmStreamTarget {
+        app: app.clone(),
+        request_id: id,
+        operation: "generate_root".to_string(),
+    });
+    let result = llm
+        .generate_root_node_with_stream(&question, stream_target)
+        .await?;
     
     let node = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -63,32 +72,17 @@ async fn generate_root_node(
         }).map_err(|e: rusqlite::Error| e.to_string())?
     };
 
-    // 3. AUTO-CATALYSIS: Generate initial exploration paths immediately
-    let (p, n) = {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        let p = db.get_active_provider()
-            .map_err(|e: rusqlite::Error| e.to_string())?
-            .ok_or("No active LLM provider.")?;
-        (p, node.clone())
-    };
-    
-    let llm_cat = LlmService::new(p);
-    let cand_result = llm_cat.generate_candidates(&n, "Follow up on the initial spark").await?;
-    
-    {
-        let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.save_candidates(node.id, cand_result.candidates).map_err(|e: rusqlite::Error| e.to_string())?;
-    }
-
     Ok(node)
 }
 
 #[tauri::command]
 async fn expand_node_with_ai(
+    app: tauri::AppHandle,
     state: State<'_, AppState>, 
     workspace_id: Uuid, 
     parent_node_id: Uuid,
-    query: String
+    query: String,
+    request_id: Option<String>,
 ) -> Result<Node, String> {
     let (provider, current_node) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -100,7 +94,14 @@ async fn expand_node_with_ai(
     };
     
     let llm = LlmService::new(provider);
-    let result = llm.expand_node(&current_node, &query).await?;
+    let stream_target = request_id.map(|id| LlmStreamTarget {
+        app: app.clone(),
+        request_id: id,
+        operation: "expand_node".to_string(),
+    });
+    let result = llm
+        .expand_node_with_stream(&current_node, &query, stream_target)
+        .await?;
     
     let node = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -120,10 +121,12 @@ async fn expand_node_with_ai(
 
 #[tauri::command]
 async fn generate_candidates(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     _workspace_id: Uuid,
     node_id: Uuid,
-    query: String
+    query: String,
+    request_id: Option<String>,
 ) -> Result<Vec<NodeCandidate>, String> {
     let (provider, current_node) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -135,7 +138,14 @@ async fn generate_candidates(
     };
 
     let llm = LlmService::new(provider);
-    let result = llm.generate_candidates(&current_node, &query).await?;
+    let stream_target = request_id.map(|id| LlmStreamTarget {
+        app: app.clone(),
+        request_id: id,
+        operation: "generate_candidates".to_string(),
+    });
+    let result = llm
+        .generate_candidates_with_stream(&current_node, &query, stream_target)
+        .await?;
 
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.save_candidates(node_id, result.candidates).map_err(|e: rusqlite::Error| e.to_string())
@@ -143,9 +153,11 @@ async fn generate_candidates(
 
 #[tauri::command]
 async fn accept_candidate(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     candidate_id: Uuid,
-    query: String
+    query: String,
+    request_id: Option<String>,
 ) -> Result<Node, String> {
     let (candidate, provider, base_node) = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -174,7 +186,14 @@ async fn accept_candidate(
 
     let llm = LlmService::new(provider);
     let prompt = format!("Focus Title: {}\nFocus Summary: {}\nContext: {}", candidate.title, candidate.summary, query);
-    let result = llm.expand_node(&base_node, &prompt).await?;
+    let stream_target = request_id.map(|id| LlmStreamTarget {
+        app: app.clone(),
+        request_id: id,
+        operation: "accept_candidate".to_string(),
+    });
+    let result = llm
+        .expand_node_with_stream(&base_node, &prompt, stream_target)
+        .await?;
 
     let node = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -217,6 +236,19 @@ fn get_workspace_snapshot(state: State<AppState>, workspace_id: Uuid, current_no
 fn update_node(state: State<AppState>, node_id: Uuid, input: NodeUpdateInput) -> Result<Node, String> {
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.update_node(node_id, input).map_err(|e: rusqlite::Error| e.to_string())
+}
+
+#[tauri::command]
+fn delete_node_branch(state: State<AppState>, node_id: Uuid) -> Result<DeleteNodeResult, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let (next_node_id, deleted_workspace) = db
+        .delete_node_branch(node_id)
+        .map_err(|e: rusqlite::Error| e.to_string())?;
+
+    Ok(DeleteNodeResult {
+        deleted_workspace,
+        next_node_id,
+    })
 }
 
 #[tauri::command]
@@ -278,6 +310,7 @@ pub fn run() {
             generate_root_node,
             expand_node_with_ai,
             update_node,
+            delete_node_branch,
             generate_candidates,
             accept_candidate,
             create_edge,

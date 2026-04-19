@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result};
+use rusqlite::{params_from_iter, Connection, Result};
 use std::path::PathBuf;
 use std::fs;
 use crate::models::{
@@ -236,6 +236,87 @@ impl DbManager {
         self.conn.execute("DELETE FROM workspaces WHERE id = ?1", [&id_str])?;
         
         Ok(())
+    }
+
+    pub fn delete_node_branch(&self, node_id: Uuid) -> Result<(Option<Uuid>, bool)> {
+        let node = self.get_node(node_id)?;
+        let workspace_root_node_id = self.conn.query_row(
+            "SELECT root_node_id FROM workspaces WHERE id = ?1",
+            [&node.workspace_id.to_string()],
+            |row| row.get::<_, Option<String>>(0),
+        )?;
+
+        if workspace_root_node_id.as_deref() == Some(node_id.to_string().as_str()) {
+            self.delete_workspace(node.workspace_id)?;
+            return Ok((None, true));
+        }
+
+        let parent_node_id = match self.conn.query_row(
+            "SELECT parent_node_id FROM node_hierarchy WHERE child_node_id = ?1",
+            [&node_id.to_string()],
+            |row| row.get::<_, Option<String>>(0),
+        ) {
+            Ok(parent_node_id) => parent_node_id.and_then(|value| Uuid::parse_str(&value).ok()),
+            Err(rusqlite::Error::QueryReturnedNoRows) => None,
+            Err(error) => return Err(error),
+        };
+
+        let subtree_node_ids = self.collect_subtree_node_ids(node_id)?;
+        let subtree_node_id_strings: Vec<String> = subtree_node_ids.into_iter().map(|id| id.to_string()).collect();
+
+        if subtree_node_id_strings.is_empty() {
+            return Ok((parent_node_id, false));
+        }
+
+        let placeholders = vec!["?"; subtree_node_id_strings.len()].join(", ");
+        let workspace_id = node.workspace_id.to_string();
+
+        let edge_sql = format!(
+            "DELETE FROM node_edges
+             WHERE workspace_id = ?
+               AND (from_node_id IN ({0}) OR to_node_id IN ({0}))",
+            placeholders
+        );
+        let mut edge_params = Vec::with_capacity(1 + subtree_node_id_strings.len() * 2);
+        edge_params.push(workspace_id.clone());
+        edge_params.extend(subtree_node_id_strings.iter().cloned());
+        edge_params.extend(subtree_node_id_strings.iter().cloned());
+        self.conn.execute(&edge_sql, params_from_iter(edge_params.iter()))?;
+
+        let candidate_sql = format!(
+            "DELETE FROM node_generation_candidates WHERE base_node_id IN ({})",
+            placeholders
+        );
+        self.conn.execute(&candidate_sql, params_from_iter(subtree_node_id_strings.iter()))?;
+
+        let snapshot_sql = format!(
+            "DELETE FROM node_context_snapshots WHERE node_id IN ({})",
+            placeholders
+        );
+        self.conn.execute(&snapshot_sql, params_from_iter(subtree_node_id_strings.iter()))?;
+
+        let hierarchy_sql = format!(
+            "DELETE FROM node_hierarchy
+             WHERE workspace_id = ?
+               AND (child_node_id IN ({0}) OR parent_node_id IN ({0}))",
+            placeholders
+        );
+        let mut hierarchy_params = Vec::with_capacity(1 + subtree_node_id_strings.len() * 2);
+        hierarchy_params.push(workspace_id.clone());
+        hierarchy_params.extend(subtree_node_id_strings.iter().cloned());
+        hierarchy_params.extend(subtree_node_id_strings.iter().cloned());
+        self.conn.execute(&hierarchy_sql, params_from_iter(hierarchy_params.iter()))?;
+
+        let node_sql = format!(
+            "DELETE FROM nodes WHERE workspace_id = ? AND id IN ({})",
+            placeholders
+        );
+        let mut node_params = Vec::with_capacity(1 + subtree_node_id_strings.len());
+        node_params.push(workspace_id);
+        node_params.extend(subtree_node_id_strings);
+        self.conn.execute(&node_sql, params_from_iter(node_params.iter()))?;
+
+        Ok((parent_node_id, false))
     }
 
     pub fn create_node(&self, input: CreateNodeInput) -> Result<Node> {
@@ -611,5 +692,29 @@ impl DbManager {
             children.push(row?);
         }
         Ok(children)
+    }
+
+    fn collect_subtree_node_ids(&self, node_id: Uuid) -> Result<Vec<Uuid>> {
+        let mut stmt = self.conn.prepare(
+            "WITH RECURSIVE subtree(id) AS (
+                SELECT ?1
+                UNION ALL
+                SELECT h.child_node_id
+                FROM node_hierarchy h
+                JOIN subtree s ON h.parent_node_id = s.id
+            )
+            SELECT id FROM subtree"
+        )?;
+
+        let rows = stmt.query_map([node_id.to_string()], |row| {
+            let raw_id: String = row.get(0)?;
+            Ok(Uuid::parse_str(&raw_id).unwrap_or_else(|_| Uuid::nil()))
+        })?;
+
+        let mut ids = Vec::new();
+        for row in rows {
+            ids.push(row?);
+        }
+        Ok(ids)
     }
 }
