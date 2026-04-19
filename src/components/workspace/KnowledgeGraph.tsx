@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { 
   ReactFlow, 
   Background, 
@@ -85,7 +85,7 @@ export default function KnowledgeGraph({
         selected: true,
       });
 
-      const parent = ancestors.last();
+      const parent = ancestors.length > 0 ? ancestors[ancestors.length - 1] : null;
       if (parent) {
         newNodes.push({
           id: parent.id,
@@ -138,16 +138,4 @@ export default function KnowledgeGraph({
       </ReactFlow>
     </div>
   );
-}
-
-// Helper for getting last item
-declare global {
-  interface Array<T> {
-    last(): T | undefined;
-  }
-}
-if (!Array.prototype.last) {
-  Array.prototype.last = function() {
-    return this[this.length - 1];
-  };
 }
