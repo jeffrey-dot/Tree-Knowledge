@@ -3,13 +3,14 @@ use std::path::PathBuf;
 use std::fs;
 use crate::models::{
     Workspace, CreateWorkspaceInput, Node, CreateNodeInput, 
-    WorkspaceSnapshot, LlmProvider, CreateProviderInput
+    WorkspaceSnapshot, LlmProvider, CreateProviderInput, NodeEdge,
+    NodeUpdateInput, NodeCandidate
 };
 use uuid::Uuid;
 use chrono::Utc;
 
 pub struct DbManager {
-    conn: Connection,
+    pub conn: Connection,
 }
 
 impl DbManager {
@@ -82,11 +83,11 @@ impl DbManager {
             CREATE TABLE IF NOT EXISTS node_generation_candidates (
                 id TEXT PRIMARY KEY,
                 base_node_id TEXT NOT NULL,
-                user_query TEXT,
                 candidate_title TEXT,
                 candidate_summary TEXT,
                 candidate_relation_type TEXT,
                 candidate_mode TEXT,
+                why_this_branch TEXT,
                 accepted BOOLEAN DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(base_node_id) REFERENCES nodes(id)
@@ -257,6 +258,94 @@ impl DbManager {
         })
     }
 
+    pub fn update_node(&self, node_id: Uuid, input: NodeUpdateInput) -> Result<Node> {
+        let now = Utc::now();
+        self.conn.execute(
+            "UPDATE nodes SET title = ?1, summary = ?2, body = ?3, status = ?4, updated_at = ?5 WHERE id = ?6",
+            (&input.title, &input.summary, &input.body, &input.status, &now, &node_id.to_string()),
+        )?;
+        self.get_node(node_id)
+    }
+
+    pub fn save_candidates(&self, base_node_id: Uuid, candidates: Vec<crate::models::NodeCandidateOutput>) -> Result<Vec<NodeCandidate>> {
+        self.conn.execute(
+            "DELETE FROM node_generation_candidates WHERE base_node_id = ?1",
+            [&base_node_id.to_string()],
+        )?;
+
+        let mut saved = Vec::new();
+        for c in candidates {
+            let id = Uuid::new_v4();
+            self.conn.execute(
+                "INSERT INTO node_generation_candidates (id, base_node_id, candidate_title, candidate_summary, candidate_relation_type, candidate_mode, why_this_branch) 
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                (
+                    &id.to_string(), 
+                    &base_node_id.to_string(), 
+                    &c.title, 
+                    &c.summary, 
+                    &c.relation_type, 
+                    &c.mode, 
+                    &c.why_this_branch
+                ),
+            )?;
+            saved.push(NodeCandidate {
+                id,
+                base_node_id,
+                title: c.title,
+                summary: c.summary,
+                relation_type: c.relation_type,
+                mode: c.mode,
+                why_this_branch: c.why_this_branch,
+            });
+        }
+        Ok(saved)
+    }
+
+    pub fn list_candidates(&self, base_node_id: Uuid) -> Result<Vec<NodeCandidate>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, base_node_id, candidate_title, candidate_summary, candidate_relation_type, candidate_mode, why_this_branch 
+             FROM node_generation_candidates WHERE base_node_id = ?1"
+        )?;
+        let rows = stmt.query_map([&base_node_id.to_string()], |row| {
+            Ok(NodeCandidate {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap_or_else(|_| Uuid::nil()),
+                base_node_id: Uuid::parse_str(&row.get::<_, String>(1)?).unwrap_or_else(|_| Uuid::nil()),
+                title: row.get(2)?,
+                summary: row.get(3)?,
+                relation_type: row.get(4)?,
+                mode: row.get(5)?,
+                why_this_branch: row.get(6)?,
+            })
+        })?;
+
+        let mut list = Vec::new();
+        for r in rows {
+            list.push(r?);
+        }
+        Ok(list)
+    }
+
+    pub fn get_node(&self, id: Uuid) -> Result<Node> {
+        self.conn.query_row(
+            "SELECT id, workspace_id, title, summary, body, status, created_by_type, source_prompt, source_answer, created_at, updated_at FROM nodes WHERE id = ?1",
+            [&id.to_string()],
+            |row| Ok(Node {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap_or_else(|_| Uuid::nil()),
+                workspace_id: Uuid::parse_str(&row.get::<_, String>(1)?).unwrap_or_else(|_| Uuid::nil()),
+                title: row.get(2)?,
+                summary: row.get(3)?,
+                body: row.get(4)?,
+                status: row.get(5)?,
+                created_by_type: row.get(6)?,
+                source_prompt: row.get(7)?,
+                source_answer: row.get(8)?,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+            })
+        )
+    }
+
     pub fn get_workspace_snapshot(&self, workspace_id: Uuid, current_node_id: Option<Uuid>) -> Result<WorkspaceSnapshot> {
         let workspace = self.conn.query_row(
             "SELECT id, name, description, root_node_id, created_at, updated_at FROM workspaces WHERE id = ?1",
@@ -291,19 +380,69 @@ impl DbManager {
             Vec::new()
         };
 
+        let recent_candidates = if let Some(id) = node_id {
+            self.list_candidates(id)?
+        } else {
+            Vec::new()
+        };
+
+        let mut edges = Vec::new();
+        if let Some(node) = &current_node {
+            if let Some(parent) = ancestors.last() {
+                edges.push(NodeEdge {
+                    id: Uuid::new_v4(),
+                    from_node_id: parent.id,
+                    to_node_id: node.id,
+                    relation_type: "hierarchy".to_string(),
+                });
+            }
+            for child in &children {
+                edges.push(NodeEdge {
+                    id: Uuid::new_v4(),
+                    from_node_id: node.id,
+                    to_node_id: child.id,
+                    relation_type: "hierarchy".to_string(),
+                });
+            }
+        }
+
+        if let Some(node) = &current_node {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, from_node_id, to_node_id, relation_type FROM node_edges 
+                 WHERE from_node_id = ?1 OR to_node_id = ?1"
+            )?;
+            let edge_rows = stmt.query_map([&node.id.to_string()], |row| {
+                Ok(NodeEdge {
+                    id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap_or_else(|_| Uuid::nil()),
+                    from_node_id: Uuid::parse_str(&row.get::<_, String>(1)?).unwrap_or_else(|_| Uuid::nil()),
+                    to_node_id: Uuid::parse_str(&row.get::<_, String>(2)?).unwrap_or_else(|_| Uuid::nil()),
+                    relation_type: row.get(3)?,
+                })
+            })?;
+            for edge in edge_rows {
+                edges.push(edge?);
+            }
+        }
+
         Ok(WorkspaceSnapshot {
             workspace,
             current_node,
             ancestors,
             children,
+            edges,
+            recent_candidates,
         })
     }
 
-    pub fn get_node(&self, id: Uuid) -> Result<Node> {
-        self.conn.query_row(
-            "SELECT id, workspace_id, title, summary, body, status, created_by_type, source_prompt, source_answer, created_at, updated_at FROM nodes WHERE id = ?1",
-            [&id.to_string()],
-            |row| Ok(Node {
+    pub fn search_nodes(&self, workspace_id: Uuid, query: &str) -> Result<Vec<Node>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, workspace_id, title, summary, body, status, created_by_type, source_prompt, source_answer, created_at, updated_at 
+             FROM nodes WHERE workspace_id = ?1 AND (title LIKE ?2 OR summary LIKE ?2 OR body LIKE ?2)
+             LIMIT 50"
+        )?;
+        let pattern = format!("%{}%", query);
+        let rows = stmt.query_map([workspace_id.to_string(), pattern], |row| {
+            Ok(Node {
                 id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap_or_else(|_| Uuid::nil()),
                 workspace_id: Uuid::parse_str(&row.get::<_, String>(1)?).unwrap_or_else(|_| Uuid::nil()),
                 title: row.get(2)?,
@@ -316,7 +455,70 @@ impl DbManager {
                 created_at: row.get(9)?,
                 updated_at: row.get(10)?,
             })
-        )
+        })?;
+
+        let mut list = Vec::new();
+        for r in rows {
+            list.push(r?);
+        }
+        Ok(list)
+    }
+
+    pub fn get_full_graph(&self, workspace_id: Uuid) -> Result<(Vec<Node>, Vec<NodeEdge>)> {
+        let mut stmt_nodes = self.conn.prepare("SELECT id, workspace_id, title, summary, body, status, created_by_type, source_prompt, source_answer, created_at, updated_at FROM nodes WHERE workspace_id = ?1")?;
+        let node_rows = stmt_nodes.query_map([workspace_id.to_string()], |row| {
+            Ok(Node {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap_or_else(|_| Uuid::nil()),
+                workspace_id: Uuid::parse_str(&row.get::<_, String>(1)?).unwrap_or_else(|_| Uuid::nil()),
+                title: row.get(2)?,
+                summary: row.get(3)?,
+                body: row.get(4)?,
+                status: row.get(5)?,
+                created_by_type: row.get(6)?,
+                source_prompt: row.get(7)?,
+                source_answer: row.get(8)?,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+            })
+        })?;
+
+        let mut nodes = Vec::new();
+        for n in node_rows { nodes.push(n?); }
+
+        let mut stmt_edges = self.conn.prepare("SELECT id, from_node_id, to_node_id, relation_type FROM node_edges WHERE workspace_id = ?1")?;
+        let edge_rows = stmt_edges.query_map([workspace_id.to_string()], |row| {
+            Ok(NodeEdge {
+                id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap_or_else(|_| Uuid::nil()),
+                from_node_id: Uuid::parse_str(&row.get::<_, String>(1)?).unwrap_or_else(|_| Uuid::nil()),
+                to_node_id: Uuid::parse_str(&row.get::<_, String>(2)?).unwrap_or_else(|_| Uuid::nil()),
+                relation_type: row.get(3)?,
+            })
+        })?;
+
+        let mut edges = Vec::new();
+        for e in edge_rows { edges.push(e?); }
+
+        // Also add hierarchy edges
+        let mut stmt_hier = self.conn.prepare("SELECT parent_node_id, child_node_id FROM node_hierarchy WHERE workspace_id = ?1")?;
+        let hier_rows = stmt_hier.query_map([workspace_id.to_string()], |row| {
+            let p_id_opt: Option<String> = row.get(0)?;
+            let c_id: String = row.get(1)?;
+            Ok((p_id_opt, c_id))
+        })?;
+
+        for h in hier_rows {
+            let (p_opt, c) = h?;
+            if let Some(p) = p_opt {
+                edges.push(NodeEdge {
+                    id: Uuid::new_v4(),
+                    from_node_id: Uuid::parse_str(&p).unwrap_or_else(|_| Uuid::nil()),
+                    to_node_id: Uuid::parse_str(&c).unwrap_or_else(|_| Uuid::nil()),
+                    relation_type: "hierarchy".to_string(),
+                });
+            }
+        }
+
+        Ok((nodes, edges))
     }
 
     fn get_ancestors(&self, node_id: Uuid) -> Result<Vec<Node>> {
@@ -336,7 +538,6 @@ impl DbManager {
                 break;
             }
         }
-        
         ancestors.reverse();
         Ok(ancestors)
     }

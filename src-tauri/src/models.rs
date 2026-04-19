@@ -44,12 +44,33 @@ pub struct CreateNodeInput {
     pub created_by_type: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NodeEdge {
+    pub id: Uuid,
+    pub from_node_id: Uuid,
+    pub to_node_id: Uuid,
+    pub relation_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NodeCandidate {
+    pub id: Uuid,
+    pub base_node_id: Uuid,
+    pub title: String,
+    pub summary: String,
+    pub relation_type: String,
+    pub mode: String,
+    pub why_this_branch: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WorkspaceSnapshot {
     pub workspace: Workspace,
     pub current_node: Option<Node>,
     pub ancestors: Vec<Node>,
     pub children: Vec<Node>,
+    pub edges: Vec<NodeEdge>,
+    pub recent_candidates: Vec<NodeCandidate>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -75,4 +96,32 @@ pub struct LlmGenerationResult {
     pub title: String,
     pub summary: String,
     pub body: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NodeUpdateInput {
+    pub title: String,
+    pub summary: Option<String>,
+    pub body: Option<String>,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LlmCandidatesResult {
+    pub candidates: Vec<NodeCandidateOutput>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NodeCandidateOutput {
+    pub title: String,
+    pub summary: String,
+    pub relation_type: String,
+    pub mode: String,
+    pub why_this_branch: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FullGraph {
+    pub nodes: Vec<Node>,
+    pub edges: Vec<NodeEdge>,
 }

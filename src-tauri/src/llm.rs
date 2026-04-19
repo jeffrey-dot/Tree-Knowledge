@@ -1,5 +1,5 @@
-use crate::models::{LlmProvider, LlmGenerationResult, Node};
-use serde::{Deserialize, Serialize};
+use crate::models::{LlmProvider, LlmGenerationResult, Node, LlmCandidatesResult};
+use serde::{Deserialize};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde_json::json;
 
@@ -44,7 +44,7 @@ impl LlmService {
             question
         );
 
-        self.call_openai(&prompt).await
+        self.call_openai_generic::<LlmGenerationResult>(&prompt).await
     }
 
     pub async fn expand_node(&self, current_node: &Node, query: &str) -> Result<LlmGenerationResult, String> {
@@ -74,10 +74,44 @@ impl LlmService {
             query
         );
 
-        self.call_openai(&prompt).await
+        self.call_openai_generic::<LlmGenerationResult>(&prompt).await
     }
 
-    async fn call_openai(&self, prompt: &str) -> Result<LlmGenerationResult, String> {
+    pub async fn generate_candidates(&self, current_node: &Node, query: &str) -> Result<LlmCandidatesResult, String> {
+        let prompt = format!(
+            "You are a knowledge exploration assistant. 
+            
+            CURRENT NODE:
+            Title: {}
+            Summary: {}
+            
+            USER INTENT: {}
+            
+            Suggest 3-5 distinct directions to expand this knowledge tree.
+            
+            RESPONSE FORMAT (JSON):
+            {{
+              \"candidates\": [
+                {{
+                  \"title\": \"Short descriptive title\",
+                  \"summary\": \"Brief 1-sentence overview\",
+                  \"relation_type\": \"related_to\",
+                  \"mode\": \"child\",
+                  \"why_this_branch\": \"Brief explanation of value\"
+                }}
+              ]
+            }}
+            
+            Return ONLY the JSON object.",
+            current_node.title,
+            current_node.summary.as_deref().unwrap_or(""),
+            query
+        );
+
+        self.call_openai_generic::<LlmCandidatesResult>(&prompt).await
+    }
+
+    async fn call_openai_generic<T: for<'de> serde::Deserialize<'de>>(&self, prompt: &str) -> Result<T, String> {
         let client = reqwest::Client::new();
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -119,7 +153,7 @@ impl LlmService {
             .content
             .clone();
 
-        let result: LlmGenerationResult = serde_json::from_str(&content).map_err(|e| {
+        let result: T = serde_json::from_str(&content).map_err(|e| {
             format!("Failed to parse AI response as JSON: {}. Content: {}", e, content)
         })?;
 
