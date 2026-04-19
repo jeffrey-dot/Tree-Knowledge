@@ -208,6 +208,36 @@ impl DbManager {
         Ok(())
     }
 
+    pub fn delete_workspace(&self, id: Uuid) -> Result<()> {
+        let id_str = id.to_string();
+        
+        // 1. Delete all edges in this workspace
+        self.conn.execute("DELETE FROM node_edges WHERE workspace_id = ?1", [&id_str])?;
+        
+        // 2. Delete all hierarchy records in this workspace
+        self.conn.execute("DELETE FROM node_hierarchy WHERE workspace_id = ?1", [&id_str])?;
+        
+        // 3. Delete all candidates related to nodes in this workspace
+        self.conn.execute(
+            "DELETE FROM node_generation_candidates WHERE base_node_id IN (SELECT id FROM nodes WHERE workspace_id = ?1)", 
+            [&id_str]
+        )?;
+
+        // 4. Delete all snapshots related to nodes in this workspace
+        self.conn.execute(
+            "DELETE FROM node_context_snapshots WHERE node_id IN (SELECT id FROM nodes WHERE workspace_id = ?1)", 
+            [&id_str]
+        )?;
+
+        // 5. Delete all nodes in this workspace
+        self.conn.execute("DELETE FROM nodes WHERE workspace_id = ?1", [&id_str])?;
+
+        // 6. Finally, delete the workspace itself
+        self.conn.execute("DELETE FROM workspaces WHERE id = ?1", [&id_str])?;
+        
+        Ok(())
+    }
+
     pub fn create_node(&self, input: CreateNodeInput) -> Result<Node> {
         let id = Uuid::new_v4();
         let now = Utc::now();

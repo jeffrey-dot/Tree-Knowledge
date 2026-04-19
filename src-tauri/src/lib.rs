@@ -45,14 +45,14 @@ async fn generate_root_node(
     let llm = LlmService::new(provider);
     let result = llm.generate_root_node(&question).await?;
     
-    let (node, _workspace_name) = {
+    let node = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
         
         // 1. Rename the workspace to the AI-generated title
         db.update_workspace_name(workspace_id, result.title.clone()).map_err(|e| e.to_string())?;
 
         // 2. Create the root node
-        let n = db.create_node(CreateNodeInput {
+        db.create_node(CreateNodeInput {
             workspace_id,
             title: result.title.clone(),
             summary: Some(result.summary),
@@ -60,10 +60,25 @@ async fn generate_root_node(
             parent_node_id: None,
             status: "confirmed".to_string(),
             created_by_type: "ai".to_string(),
-        }).map_err(|e: rusqlite::Error| e.to_string())?;
-
-        (n, result.title)
+        }).map_err(|e: rusqlite::Error| e.to_string())?
     };
+
+    // 3. AUTO-CATALYSIS: Generate initial exploration paths immediately
+    let (p, n) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let p = db.get_active_provider()
+            .map_err(|e: rusqlite::Error| e.to_string())?
+            .ok_or("No active LLM provider.")?;
+        (p, node.clone())
+    };
+    
+    let llm_cat = LlmService::new(p);
+    let cand_result = llm_cat.generate_candidates(&n, "Follow up on the initial spark").await?;
+    
+    {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.save_candidates(node.id, cand_result.candidates).map_err(|e: rusqlite::Error| e.to_string())?;
+    }
 
     Ok(node)
 }
@@ -234,6 +249,12 @@ fn get_full_graph(state: State<AppState>, workspace_id: Uuid) -> Result<FullGrap
     Ok(FullGraph { nodes, edges })
 }
 
+#[tauri::command]
+fn delete_workspace(state: State<AppState>, id: Uuid) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    db.delete_workspace(id).map_err(|e: rusqlite::Error| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -250,6 +271,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_workspaces, 
             create_workspace, 
+            delete_workspace,
             get_workspace_snapshot,
             list_providers,
             create_provider,

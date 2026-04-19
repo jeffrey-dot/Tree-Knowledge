@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Settings, Sparkles, Loader2, Compass } from "lucide-react";
+import { Settings, Sparkles, Loader2, Compass, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Workspace {
@@ -58,6 +58,17 @@ export default function Launchpad({
     }
   };
 
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to permanently delete this theme? This cannot be undone.")) return;
+    try {
+      await invoke("delete_workspace", { id });
+      await loadWorkspaces();
+    } catch (error) {
+      alert(error);
+    }
+  };
+
   return (
     <div 
       className="min-h-screen bg-transparent overflow-hidden relative selection:bg-blue-500/30"
@@ -77,7 +88,7 @@ export default function Launchpad({
               <Compass className="w-6 h-6 text-black" />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tighter leading-none">TREE KNOWLEDGE</h1>
+              <h1 className="text-xl font-black tracking-tighter leading-none text-white">TREE KNOWLEDGE</h1>
               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em] mt-1">Cognitive Navigator</p>
             </div>
           </div>
@@ -104,7 +115,7 @@ export default function Launchpad({
             const angle = (i / workspaces.length) * Math.PI * 2;
             const radius = 240 + (i % 2 === 0 ? 40 : -40);
             return (
-              <motion.button
+              <motion.div
                 key={ws.id}
                 initial={{ scale: 0, opacity: 0 }}
                 animate={{ 
@@ -116,16 +127,17 @@ export default function Launchpad({
                 whileHover={{ 
                   scale: 1.1, 
                   zIndex: 20,
-                  rotate: [0, -1, 1, 0],
                 }}
-                onClick={() => onEnterWorkspace(ws.id)}
                 className="absolute group"
               >
                 <div className="relative">
                   {/* Glowing Aura */}
                   <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                   
-                  <div className="w-40 h-40 rounded-full bg-neutral-900/40 backdrop-blur-2xl border border-white/10 flex flex-col items-center justify-center p-6 text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)] group-hover:border-blue-500/50 transition-all duration-500">
+                  <button
+                    onClick={() => onEnterWorkspace(ws.id)}
+                    className="w-40 h-40 rounded-full bg-neutral-900/40 backdrop-blur-2xl border border-white/10 flex flex-col items-center justify-center p-6 text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)] group-hover:border-blue-500/50 transition-all duration-500 overflow-hidden"
+                  >
                     <motion.div 
                       animate={{ y: [0, -4, 0] }}
                       transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: i * 0.5 }}
@@ -134,9 +146,17 @@ export default function Launchpad({
                     <span className="text-[11px] font-black text-white leading-tight uppercase tracking-wide line-clamp-3 group-hover:text-blue-200 transition-colors">
                       {ws.name}
                     </span>
-                  </div>
+                  </button>
+
+                  {/* Minimal Delete Button */}
+                  <button
+                    onClick={(e) => handleDelete(e, ws.id)}
+                    className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all scale-75 group-hover:scale-100 z-30 shadow-lg"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              </motion.button>
+              </motion.div>
             );
           })}
         </AnimatePresence>
@@ -154,7 +174,7 @@ export default function Launchpad({
 
         {workspaces.length === 0 && !isCreating && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <p className="mt-64 text-gray-600 font-bold uppercase tracking-[0.5em] text-[10px] animate-pulse">Double Click Canvas to Initiate</p>
+            <p className="mt-64 text-gray-600 font-bold uppercase tracking-[0.5em] text-[10px] animate-pulse text-white">Double Click Canvas to Initiate</p>
           </div>
         )}
       </main>
@@ -180,7 +200,7 @@ export default function Launchpad({
               {/* Modal Background Glow */}
               <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-600/20 rounded-full blur-[80px]" />
               
-              <div className="relative z-10">
+              <div className="relative z-10 text-white">
                 <h3 className="text-4xl font-black text-white mb-4 tracking-tighter italic">Launch a Thought</h3>
                 <p className="text-gray-500 text-sm mb-12 font-medium">Describe your inquiry. AI will crystallize the first node of your knowledge tree.</p>
 
