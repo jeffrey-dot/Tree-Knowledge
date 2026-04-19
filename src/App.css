@@ -6,6 +6,7 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #000;
 }
 
 body {
@@ -13,7 +14,14 @@ body {
   padding: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #050505;
+  background-color: #000;
+  color: #fff;
+  overflow: hidden;
+}
+
+#root {
+  background-color: #000;
+  min-height: 100vh;
 }
 
 /* Custom Scrollbar for sleek sidebars */
@@ -26,12 +34,12 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #f1f1f1;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #ddd;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* Slow spin for icons */
@@ -51,4 +59,9 @@ body {
 /* Perspective utilities */
 .perspective-1000 {
   perspective: 1000px;
+}
+
+/* Eliminate tap highlight on mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
 }

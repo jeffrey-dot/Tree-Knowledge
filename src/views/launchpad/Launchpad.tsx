@@ -60,17 +60,11 @@ export default function Launchpad({
 
   return (
     <div 
-      className="min-h-screen bg-[#050505] text-white overflow-hidden relative selection:bg-blue-500/30"
+      className="min-h-screen bg-transparent overflow-hidden relative selection:bg-blue-500/30"
       onDoubleClick={(e) => {
         if (e.target === e.currentTarget) setIsCreating(true);
       }}
     >
-      {/* Dynamic Nebula Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] bg-blue-600/10 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute -bottom-[20%] -right-[10%] w-[60%] h-[60%] bg-indigo-600/10 rounded-full blur-[100px] animate-pulse [animation-delay:2s]" />
-      </div>
-
       {/* Glass Header */}
       <header className="fixed top-0 left-0 right-0 p-8 flex justify-between items-center z-30 pointer-events-none">
         <motion.div 

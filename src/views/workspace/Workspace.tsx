@@ -190,13 +190,7 @@ export default function WorkspaceView({ workspaceId, onBack }: { workspaceId: st
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#050505] text-white overflow-hidden relative selection:bg-blue-500/30">
-      {/* Background Decor (Nebula Sync) */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-[10%] -left-[10%] w-[50%] h-[50%] bg-blue-900/10 rounded-full blur-[120px]" />
-        <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-indigo-900/10 rounded-full blur-[100px]" />
-      </div>
-
+    <div className="h-full flex flex-col bg-transparent text-white overflow-hidden relative selection:bg-blue-500/30">
       {/* Floating Exit Button */}
       <nav className="absolute top-8 left-8 z-30 pointer-events-none">
         <button 

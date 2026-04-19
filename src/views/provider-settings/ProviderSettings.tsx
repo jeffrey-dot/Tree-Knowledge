@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Settings, Shield, Globe, Cpu, Save, AlertCircle } from "lucide-react";
+import { Settings, Shield, Globe, Cpu, Save, AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
 
 interface LlmProvider {
   id: string;
@@ -54,71 +55,79 @@ export default function ProviderSettings({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="h-16 bg-white border-b border-gray-200 flex items-center px-8 justify-between shrink-0">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="text-sm text-gray-500 hover:text-blue-600 font-medium">
-            ← Back
+    <div className="min-h-screen bg-transparent text-white flex flex-col relative overflow-hidden">
+      <header className="h-20 bg-white/5 backdrop-blur-xl border-b border-white/5 flex items-center px-8 justify-between shrink-0 z-10">
+        <div className="flex items-center gap-6">
+          <button 
+            onClick={onBack} 
+            className="group flex items-center gap-2 text-gray-500 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em]">Return</span>
           </button>
-          <span className="text-gray-300">|</span>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Settings className="w-5 h-5 text-gray-400" />
-            LLM Settings
+          <div className="w-[1px] h-4 bg-white/10" />
+          <h1 className="text-sm font-black uppercase tracking-[0.3em] flex items-center gap-3">
+            <Settings className="w-4 h-4 text-blue-500" />
+            Protocol Settings
           </h1>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left: Form */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm">
-              <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
+      <main className="flex-1 overflow-y-auto p-12 z-10 custom-scrollbar">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-12">
+          {/* Left: Configuration Form */}
+          <div className="lg:col-span-2 space-y-8">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-neutral-900/40 backdrop-blur-2xl rounded-[2.5rem] p-12 border border-white/5 shadow-2xl"
+            >
+              <h2 className="text-xl font-black mb-10 flex items-center gap-3 uppercase tracking-tight">
                 <Shield className="w-5 h-5 text-blue-500" />
-                Add Provider
+                Initialize Provider
               </h2>
               
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Display Name</label>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 ml-1">Identity</label>
                     <input 
                       value={name} onChange={(e) => setName(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-6 py-4 bg-white/5 border border-white/5 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all font-bold text-gray-200"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Default Model</label>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 ml-1">Primary Model</label>
                     <input 
                       value={model} onChange={(e) => setModel(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-6 py-4 bg-white/5 border border-white/5 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all font-bold text-gray-200"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Base URL (OpenAI Compatible)</label>
-                  <div className="relative">
-                    <Globe className="absolute left-3 top-2.5 w-4 h-4 text-gray-300" />
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 ml-1">Endpoint (OpenAI Compatible)</label>
+                  <div className="relative group">
+                    <Globe className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-blue-500 transition-colors" />
                     <input 
                       value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full pl-14 pr-6 py-4 bg-white/5 border border-white/5 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all font-bold text-gray-200"
                       placeholder="https://api.openai.com/v1"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">API Key</label>
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 ml-1">Access Token</label>
                   <input 
                     type="password"
                     value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="sk-..."
+                    className="w-full px-6 py-4 bg-white/5 border border-white/5 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all font-bold text-gray-200"
+                    placeholder="••••••••••••••••"
                   />
-                  <p className="mt-2 text-[10px] text-gray-400 flex items-center gap-1">
+                  <p className="mt-4 text-[10px] text-gray-500 font-medium flex items-center gap-2 italic">
                     <AlertCircle className="w-3 h-3" />
-                    Stored locally in your application database.
+                    Encrypted and stored in your local SQLite database.
                   </p>
                 </div>
               </div>
@@ -126,42 +135,50 @@ export default function ProviderSettings({ onBack }: { onBack: () => void }) {
               <button 
                 onClick={handleSave}
                 disabled={isSaving}
-                className="mt-8 w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="mt-12 w-full py-5 bg-white text-black rounded-full font-black uppercase text-xs tracking-widest hover:bg-blue-400 transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-[0_20px_40px_rgba(255,255,255,0.05)]"
               >
-                <Save className="w-4 h-4" />
-                {isSaving ? "Saving..." : "Save Configuration"}
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {isSaving ? "Synchronizing..." : "Authorize Provider"}
               </button>
-            </div>
+            </motion.div>
           </div>
 
-          {/* Right: Active Status */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-              <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Current Providers</h2>
-              <div className="space-y-3">
+          {/* Right: Active Nodes */}
+          <div className="space-y-8">
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="bg-white/5 backdrop-blur-xl rounded-[2.5rem] p-8 border border-white/5 shadow-xl"
+            >
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-8">Established Links</h2>
+              <div className="space-y-4">
                 {providers.map(p => (
-                  <div key={p.id} className="p-4 rounded-xl border border-gray-100 bg-gray-50 flex items-center justify-between">
+                  <div key={p.id} className="p-6 rounded-3xl border border-white/5 bg-white/5 flex items-center justify-between group hover:border-white/10 transition-colors">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <Cpu className="w-3.5 h-3.5 text-blue-500" />
-                        <span className="text-sm font-bold text-gray-800">{p.name}</span>
+                      <div className="flex items-center gap-3">
+                        <Cpu className="w-4 h-4 text-blue-500" />
+                        <span className="text-sm font-black uppercase tracking-tight text-gray-200">{p.name}</span>
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-1">{p.default_model}</p>
+                      <p className="text-[10px] text-gray-500 font-bold mt-2 uppercase tracking-tighter opacity-60">{p.default_model}</p>
                     </div>
                     {p.is_enabled && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-green-100 text-[8px] font-bold text-green-600 uppercase">Active</span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-[8px] font-black text-blue-400 uppercase tracking-widest">Active</span>
+                      </div>
                     )}
                   </div>
                 ))}
                 {providers.length === 0 && (
-                  <p className="text-center py-4 text-xs text-gray-400 italic">No providers configured yet.</p>
+                  <div className="text-center py-10">
+                    <p className="text-xs text-gray-600 font-bold uppercase tracking-widest italic">No active links</p>
+                  </div>
                 )}
               </div>
-            </div>
+            </motion.div>
 
-            <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100">
-              <p className="text-[11px] text-blue-600 leading-relaxed">
-                <strong>Tree Knowledge</strong> works best with models that support JSON output mode. We recommend using <code>gpt-4o</code>, <code>claude-3-5-sonnet</code> (via proxy), or equivalent.
+            <div className="p-8 rounded-[2rem] bg-blue-500/5 border border-blue-500/10">
+              <p className="text-[11px] text-blue-400 font-bold leading-relaxed uppercase tracking-tight italic opacity-80">
+                Synthesis requires models optimized for structural JSON output. We recommend gpt-4o or claude-3-5-sonnet for maximum coherence.
               </p>
             </div>
           </div>
