@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Settings, Sparkles, Loader2 } from "lucide-react";
+import { Settings, Sparkles, Loader2, Compass } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Workspace {
@@ -41,18 +41,13 @@ export default function Launchpad({
     if (!initialQuestion.trim()) return;
     setIsProcessing(true);
     try {
-      // 1. Create with temporary name
       const ws = await invoke<Workspace>("create_workspace", {
-        input: { name: "Crystallizing...", description: null }
+        input: { name: "New Spark...", description: null }
       });
-      
-      // 2. Generate root node (this will now also rename the workspace)
       await invoke("generate_root_node", {
         workspaceId: ws.id,
         question: initialQuestion
       });
-
-      // 3. Reload list to see the AI-generated name
       await loadWorkspaces();
       setIsCreating(false);
       setInitialQuestion("");
@@ -65,78 +60,112 @@ export default function Launchpad({
 
   return (
     <div 
-      className="min-h-screen bg-white overflow-hidden relative"
+      className="min-h-screen bg-[#050505] text-white overflow-hidden relative selection:bg-blue-500/30"
       onDoubleClick={(e) => {
-        if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'MAIN') {
-          setIsCreating(true);
-        }
+        if (e.target === e.currentTarget) setIsCreating(true);
       }}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:32px_32px] opacity-40 pointer-events-none" />
-      
-      <header className="absolute top-0 left-0 right-0 p-8 flex justify-between items-center z-10">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tighter italic">TREE KNOWLEDGE</h1>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] ml-1">Thought Cloud</p>
-        </div>
-        <div className="flex gap-4">
-          <button 
-            onClick={() => setIsCreating(true)}
-            className="flex items-center gap-2 px-6 py-2.5 bg-black text-white rounded-full hover:scale-105 transition-transform active:scale-95 shadow-2xl shadow-black/20 group"
-          >
-            <Sparkles className="w-4 h-4 group-hover:animate-pulse" />
-            <span className="text-sm font-black uppercase tracking-tighter">Spark Idea</span>
-          </button>
+      {/* Dynamic Nebula Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] bg-blue-600/10 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute -bottom-[20%] -right-[10%] w-[60%] h-[60%] bg-indigo-600/10 rounded-full blur-[100px] animate-pulse [animation-delay:2s]" />
+      </div>
+
+      {/* Glass Header */}
+      <header className="fixed top-0 left-0 right-0 p-8 flex justify-between items-center z-30 pointer-events-none">
+        <motion.div 
+          initial={{ x: -20, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          className="pointer-events-auto"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.2)]">
+              <Compass className="w-6 h-6 text-black" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black tracking-tighter leading-none">TREE KNOWLEDGE</h1>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em] mt-1">Cognitive Navigator</p>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ x: 20, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          className="flex gap-2 pointer-events-auto"
+        >
           <button 
             onClick={onOpenSettings}
-            className="p-3 text-gray-300 hover:text-black transition-colors"
+            className="p-3 text-gray-500 hover:text-white transition-colors bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10"
           >
             <Settings className="w-5 h-5" />
           </button>
-        </div>
+        </motion.div>
       </header>
 
-      <main className="h-screen w-full flex items-center justify-center relative">
+      {/* Theme Cloud */}
+      <main className="h-screen w-full flex items-center justify-center relative perspective-1000">
         <AnimatePresence>
-          {workspaces.map((ws, i) => (
-            <motion.button
-              key={ws.id}
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ 
-                scale: 1, 
-                opacity: 1,
-                x: Math.sin(i * 1.5) * (200 + (i * 10)),
-                y: Math.cos(i * 1.5) * (200 + (i * 10)),
-              }}
-              whileHover={{ 
-                scale: 1.1, 
-                zIndex: 20,
-              }}
-              onClick={() => onEnterWorkspace(ws.id)}
-              className="absolute w-36 h-32 rounded-full bg-white/80 backdrop-blur-xl border border-gray-100 flex flex-col items-center justify-center p-6 text-center cursor-pointer group shadow-sm hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 transition-all"
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mb-3 opacity-50 group-hover:opacity-100 group-hover:scale-125 transition-all" />
-              <span className="text-[11px] font-black text-gray-900 leading-tight uppercase tracking-tight line-clamp-3">
-                {ws.name}
-              </span>
-            </motion.button>
-          ))}
+          {workspaces.map((ws, i) => {
+            const angle = (i / workspaces.length) * Math.PI * 2;
+            const radius = 240 + (i % 2 === 0 ? 40 : -40);
+            return (
+              <motion.button
+                key={ws.id}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ 
+                  scale: 1, 
+                  opacity: 1,
+                  x: Math.cos(angle) * radius,
+                  y: Math.sin(angle) * radius,
+                }}
+                whileHover={{ 
+                  scale: 1.1, 
+                  zIndex: 20,
+                  rotate: [0, -1, 1, 0],
+                }}
+                onClick={() => onEnterWorkspace(ws.id)}
+                className="absolute group"
+              >
+                <div className="relative">
+                  {/* Glowing Aura */}
+                  <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                  
+                  <div className="w-40 h-40 rounded-full bg-neutral-900/40 backdrop-blur-2xl border border-white/10 flex flex-col items-center justify-center p-6 text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)] group-hover:border-blue-500/50 transition-all duration-500">
+                    <motion.div 
+                      animate={{ y: [0, -4, 0] }}
+                      transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: i * 0.5 }}
+                      className="w-1.5 h-1.5 rounded-full bg-blue-400 mb-4 shadow-[0_0_10px_#60a5fa]" 
+                    />
+                    <span className="text-[11px] font-black text-white leading-tight uppercase tracking-wide line-clamp-3 group-hover:text-blue-200 transition-colors">
+                      {ws.name}
+                    </span>
+                  </div>
+                </div>
+              </motion.button>
+            );
+          })}
         </AnimatePresence>
 
+        {/* Central Spark Trigger */}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setIsCreating(true)}
+          className="z-20 w-32 h-32 rounded-full bg-white flex flex-col items-center justify-center gap-2 shadow-[0_0_50px_rgba(255,255,255,0.15)] hover:shadow-[0_0_80px_rgba(255,255,255,0.25)] transition-all group border-8 border-black/10"
+        >
+          <Sparkles className="w-8 h-8 text-black group-hover:rotate-12 transition-transform" />
+          <span className="text-[10px] font-black text-black uppercase tracking-widest">New Seed</span>
+        </motion.button>
+
         {workspaces.length === 0 && !isCreating && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center"
-          >
-            <div className="w-32 h-32 rounded-full border border-dashed border-gray-200 mx-auto mb-6 flex items-center justify-center animate-pulse">
-              <Sparkles className="w-8 h-8 text-gray-200" />
-            </div>
-            <p className="text-gray-300 font-black uppercase tracking-[0.4em] text-[10px]">Double click to initiate</p>
-          </motion.div>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <p className="mt-64 text-gray-600 font-bold uppercase tracking-[0.5em] text-[10px] animate-pulse">Double Click Canvas to Initiate</p>
+          </div>
         )}
       </main>
 
+      {/* Cinematic Creation Modal */}
       <AnimatePresence>
         {isCreating && (
           <div className="fixed inset-0 flex items-center justify-center z-50 p-6">
@@ -145,51 +174,57 @@ export default function Launchpad({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsCreating(false)}
-              className="absolute inset-0 bg-white/40 backdrop-blur-md" 
+              className="absolute inset-0 bg-black/80 backdrop-blur-xl" 
             />
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 40 }}
+              initial={{ scale: 0.8, opacity: 0, y: 40 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 40 }}
-              className="bg-white rounded-[3rem] p-12 max-w-2xl w-full shadow-[0_32px_120px_rgba(0,0,0,0.15)] relative border border-gray-50"
+              exit={{ scale: 0.8, opacity: 0, y: 40 }}
+              transition={{ type: "spring", damping: 25 }}
+              className="bg-[#111] rounded-[3rem] p-16 max-w-2xl w-full shadow-[0_0_100px_rgba(0,0,0,1)] relative border border-white/5 overflow-hidden"
             >
-              <h3 className="text-4xl font-black text-gray-900 mb-4 tracking-tighter">What's on your mind?</h3>
-              <p className="text-gray-400 text-sm mb-10 font-medium tracking-tight">Ask a question or describe a concept to start a new knowledge tree.</p>
+              {/* Modal Background Glow */}
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-600/20 rounded-full blur-[80px]" />
+              
+              <div className="relative z-10">
+                <h3 className="text-4xl font-black text-white mb-4 tracking-tighter italic">Launch a Thought</h3>
+                <p className="text-gray-500 text-sm mb-12 font-medium">Describe your inquiry. AI will crystallize the first node of your knowledge tree.</p>
 
-              <div className="space-y-6">
-                <div className="relative group">
-                  <textarea
-                    autoFocus
-                    value={initialQuestion}
-                    onChange={(e) => setInitialQuestion(e.target.value)}
-                    className="w-full px-8 py-8 bg-gray-50 rounded-[2rem] border-none focus:ring-4 focus:ring-blue-500/10 outline-none transition-all h-48 resize-none text-xl font-bold text-gray-800 placeholder:text-gray-300"
-                    placeholder="e.g. How do large language models actually 'think'?"
-                  />
-                  <div className="absolute bottom-6 right-8 text-[10px] font-black text-gray-300 uppercase tracking-widest group-focus-within:text-blue-400 transition-colors">
-                    The Spark
+                <div className="space-y-6">
+                  <div className="relative group">
+                    <textarea
+                      autoFocus
+                      value={initialQuestion}
+                      onChange={(e) => setInitialQuestion(e.target.value)}
+                      className="w-full px-10 py-10 bg-white/5 rounded-[2.5rem] border border-white/5 focus:border-blue-500/50 focus:ring-8 focus:ring-blue-500/5 outline-none transition-all h-56 resize-none text-2xl font-bold text-white placeholder:text-neutral-800"
+                      placeholder="e.g. What is the fundamental nature of time in general relativity?"
+                    />
+                    <div className="absolute top-8 left-10 text-[10px] font-black text-neutral-800 uppercase tracking-widest group-focus-within:text-blue-500/50 transition-colors">
+                      Input Stream
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex gap-4 mt-12">
-                <button
-                  onClick={() => setIsCreating(false)}
-                  disabled={isProcessing}
-                  className="flex-1 px-4 py-5 text-gray-400 rounded-full font-black uppercase text-[10px] tracking-widest hover:text-black transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreate}
-                  disabled={!initialQuestion.trim() || isProcessing}
-                  className="flex-[2] px-4 py-5 bg-black text-white rounded-full font-black uppercase text-[10px] tracking-widest hover:shadow-2xl hover:shadow-black/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                >
-                  {isProcessing ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>Initiate Growth</>
-                  )}
-                </button>
+                <div className="flex gap-4 mt-12">
+                  <button
+                    onClick={() => setIsCreating(false)}
+                    disabled={isProcessing}
+                    className="flex-1 px-4 py-6 text-gray-500 rounded-full font-black uppercase text-[10px] tracking-widest hover:text-white transition-colors"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    onClick={handleCreate}
+                    disabled={!initialQuestion.trim() || isProcessing}
+                    className="flex-[2] px-4 py-6 bg-white text-black rounded-full font-black uppercase text-[10px] tracking-widest hover:bg-blue-400 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                  >
+                    {isProcessing ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>Initialize Growth</>
+                    )}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
