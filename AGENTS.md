@@ -49,6 +49,7 @@ These rules are more important than implementation convenience:
 - `docs/context-rules.md`: context isolation, retrieval precedence, summaries, branching, merge, archive, and delete rules.
 - `docs/architecture.md`: proposed technical architecture, storage model, services, and main flows.
 - `docs/mvp-roadmap.md`: implementation milestones and acceptance criteria.
+- `DESIGN.md`: frontend visual system and interaction guidance for the Tree Knowledge desktop workspace.
 
 ## Engineering Principles
 
@@ -67,7 +68,8 @@ Before writing code:
 1. Read this file.
 2. Read `docs/context-rules.md`.
 3. Read the relevant section of `docs/architecture.md`.
-4. State which product invariant the change touches.
+4. If the change touches UI, read `DESIGN.md`.
+5. State which product invariant the change touches.
 
 When implementing context assembly:
 
@@ -82,6 +84,10 @@ When implementing UI:
 - Do not hide the product behind a folder/file explorer metaphor.
 - Keep current node, parent chain, siblings, archived nodes, and merged sources visually distinguishable.
 - Provide an action to inspect the exact context sent to the LLM.
+- Use `DESIGN.md` as the source for visual tokens, component styling, tree canvas states, motion, and accessibility.
+- Apply the design system as a desktop workbench, not as a marketing page: no default landing hero, no oversized workspace typography, and no decorative visuals that reduce information density.
+- If `DESIGN.md` conflicts with product invariants, context rules, or long-session usability, the product/context rules win.
+- Preserve `DESIGN.md`'s source badges and semantic colors for context provenance: current, parent, global, web, and excluded.
 
 When implementing persistence:
 
