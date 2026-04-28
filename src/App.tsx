@@ -677,13 +677,19 @@ function TreeCanvas({
     }));
   }
 
+  function handleCreateSuggestion(nodeId: string, suggestion: SuggestedNode) {
+    setHoveredNodeId(null);
+    setCustomSuggestion("");
+    onCreateSuggestedNode(nodeId, suggestion);
+  }
+
   function handleCreateCustomSuggestion(nodeId: string, input = customSuggestion) {
     const suggestion = createCustomSuggestedNode(input);
     if (!suggestion) return;
 
-    onCreateSuggestedNode(nodeId, suggestion);
-    setCustomSuggestion("");
     setHoveredNodeId(null);
+    setCustomSuggestion("");
+    onCreateSuggestedNode(nodeId, suggestion);
   }
 
   return (
@@ -811,7 +817,7 @@ function TreeCanvas({
             node={hoveredNode}
             suggestions={getAvailableSuggestedNodes(hoveredNode, nodes)}
             customValue={customSuggestion}
-            onCreate={(suggestion) => onCreateSuggestedNode(hoveredNode.id, suggestion)}
+            onCreate={(suggestion) => handleCreateSuggestion(hoveredNode.id, suggestion)}
             onCreateCustom={(input) =>
               handleCreateCustomSuggestion(hoveredNode.id, input)
             }
