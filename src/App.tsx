@@ -57,6 +57,10 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 const clayShadow =
   "shadow-[rgba(0,0,0,0.1)_0_1px_1px,rgba(0,0,0,0.04)_0_-1px_1px_inset,rgba(0,0,0,0.05)_0_-0.5px_1px]";
 const hardShadow = "shadow-[rgb(0,0,0)_-4px_4px_0]";
@@ -115,6 +119,8 @@ const nodeRowStep = 160;
 const childNodeOffsetX = nodeDepthStep;
 const childNodeOffsetY = 80;
 const childNodeVerticalStep = 140;
+const minCanvasZoom = 0.55;
+const maxCanvasZoom = 1.8;
 
 function getParentChain(node: TreeNode, allNodes: TreeNode[]) {
   const byId = new Map(allNodes.map((item) => [item.id, item]));
@@ -592,6 +598,7 @@ function TreeCanvas({
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [customSuggestion, setCustomSuggestion] = useState("");
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
   const [isPanning, setIsPanning] = useState(false);
   const panGesture = useRef<{
     pointerId: number;
@@ -671,6 +678,30 @@ function TreeCanvas({
     if (isWheelLockedTarget(event.target)) return;
 
     event.preventDefault();
+
+    if (event.ctrlKey) {
+      const nextZoom = clamp(
+        zoom * Math.exp(-event.deltaY * 0.0015),
+        minCanvasZoom,
+        maxCanvasZoom,
+      );
+
+      if (nextZoom === zoom) return;
+
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const pointerX = event.clientX - bounds.left;
+      const pointerY = event.clientY - bounds.top;
+      const worldX = (pointerX - pan.x) / zoom;
+      const worldY = (pointerY - pan.y) / zoom;
+
+      setZoom(nextZoom);
+      setPan({
+        x: pointerX - worldX * nextZoom,
+        y: pointerY - worldY * nextZoom,
+      });
+      return;
+    }
+
     setPan((currentPan) => ({
       x: currentPan.x - event.deltaX,
       y: currentPan.y - event.deltaY,
@@ -710,7 +741,7 @@ function TreeCanvas({
         style={{
           width: stageSize.width,
           height: stageSize.height,
-          transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`,
+          transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
         }}
       >
         <svg
