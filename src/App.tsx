@@ -17,12 +17,17 @@ import {
   GitBranch,
   Merge,
   Plus,
+  RefreshCw,
   Search,
   Settings,
   Sparkles,
   X,
 } from "lucide-react";
-import { defaultLlmMode, generateNodeContentStream } from "./llm";
+import {
+  defaultLlmMode,
+  generateNodeContentStream,
+  type GenerateNodeContentInput,
+} from "./llm";
 import { nodeDetails, nodes } from "./mockData";
 import type { NodeDetailMock, SourceScope, TreeNode } from "./types";
 
@@ -301,6 +306,7 @@ function App() {
   const [activeNodeId, setActiveNodeId] = useState("ui");
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
   const [showContext, setShowContext] = useState(false);
+  const generationRunIds = useRef<Record<string, number>>({});
 
   const activeNode = treeNodes.find((node) => node.id === activeNodeId) ?? treeNodes[0];
   const detailNode = detailNodeId
@@ -317,16 +323,24 @@ function App() {
     setDetailNodeId(nodeId);
   }
 
-  function streamGeneratedNodeContent(nodeId: string, suggestion: SuggestedNode, parent: TreeNode) {
+  function streamGeneratedNodeContent(
+    nodeId: string,
+    input: GenerateNodeContentInput,
+  ) {
+    const runId = (generationRunIds.current[nodeId] ?? 0) + 1;
+    generationRunIds.current[nodeId] = runId;
+
     setGeneratingNodeIds((currentIds) => new Set(currentIds).add(nodeId));
+    setNodeDetailMap((currentDetails) => ({
+      ...currentDetails,
+      [nodeId]: { content: "" },
+    }));
 
     void (async () => {
       try {
-        for await (const chunk of generateNodeContentStream({
-          title: suggestion.title,
-          goal: suggestion.goal,
-          parentTitle: parent.title,
-        })) {
+        for await (const chunk of generateNodeContentStream(input)) {
+          if (generationRunIds.current[nodeId] !== runId) return;
+
           setNodeDetailMap((currentDetails) => ({
             ...currentDetails,
             [nodeId]: {
@@ -335,11 +349,14 @@ function App() {
           }));
         }
       } finally {
+        if (generationRunIds.current[nodeId] !== runId) return;
+
         setGeneratingNodeIds((currentIds) => {
           const nextIds = new Set(currentIds);
           nextIds.delete(nodeId);
           return nextIds;
         });
+        delete generationRunIds.current[nodeId];
       }
     })();
   }
@@ -351,13 +368,25 @@ function App() {
     const siblingCount = treeNodes.filter((node) => node.parentId === parent.id).length;
     const nextNode = createSuggestedTreeNode(parent, suggestion, siblingCount);
     setTreeNodes((currentNodes) => [...currentNodes, nextNode]);
-    setNodeDetailMap((currentDetails) => ({
-      ...currentDetails,
-      [nextNode.id]: { content: "" },
-    }));
     setActiveNodeId(nextNode.id);
     setDetailNodeId(nextNode.id);
-    streamGeneratedNodeContent(nextNode.id, suggestion, parent);
+    streamGeneratedNodeContent(nextNode.id, {
+      title: suggestion.title,
+      goal: suggestion.goal,
+      parentTitle: parent.title,
+    });
+  }
+
+  function handleRegenerateNodeContent(node: TreeNode) {
+    const parent = node.parentId
+      ? treeNodes.find((candidate) => candidate.id === node.parentId)
+      : null;
+
+    streamGeneratedNodeContent(node.id, {
+      title: node.title,
+      goal: node.goal,
+      parentTitle: parent?.title,
+    });
   }
 
   return (
@@ -425,6 +454,7 @@ function App() {
               isGenerating={generatingNodeIds.has(detailNode.id)}
               node={detailNode}
               onClose={() => setDetailNodeId(null)}
+              onRegenerate={handleRegenerateNodeContent}
             />
           ) : null}
         </section>
@@ -941,11 +971,13 @@ function NodeDetailDialog({
   isGenerating,
   node,
   onClose,
+  onRegenerate,
 }: {
   detailMap: Record<string, NodeDetailMock>;
   isGenerating: boolean;
   node: TreeNode;
   onClose: () => void;
+  onRegenerate: (node: TreeNode) => void;
 }) {
   const detail = detailMap[node.id] ?? getFallbackNodeDetail(node);
 
@@ -980,13 +1012,32 @@ function NodeDetailDialog({
               {node.title}
             </h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {isGenerating ? (
               <span className="inline-flex min-h-[30px] items-center gap-1.5 rounded-full border border-[#dad4c8] bg-[#fff8e5] px-2.5 text-xs font-extrabold text-black">
                 <Sparkles size={13} aria-hidden="true" />
                 流式生成中
               </span>
             ) : null}
+            <button
+              className={cx(
+                "inline-flex min-h-[30px] items-center justify-center gap-1.5 rounded-lg border border-[#dad4c8] bg-white px-2.5 text-xs font-extrabold text-black",
+                "transition-[transform,box-shadow,opacity] duration-[120ms] ease-[ease] hover:-translate-y-px",
+                hardShadowHover,
+                isGenerating && "cursor-not-allowed opacity-55 hover:translate-y-0",
+              )}
+              type="button"
+              aria-label="重新生成节点内容"
+              disabled={isGenerating}
+              onClick={() => onRegenerate(node)}
+            >
+              <RefreshCw
+                className={isGenerating ? "animate-spin" : undefined}
+                size={13}
+                aria-hidden="true"
+              />
+              重新生成
+            </button>
             <button
               className={cx(iconButtonClass, "h-[30px] w-[30px]")}
               aria-label="关闭详情"

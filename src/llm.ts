@@ -3,13 +3,17 @@ export const defaultLlmMode = "stream";
 export type GenerateNodeContentInput = {
   title: string;
   goal: string;
-  parentTitle: string;
+  parentTitle?: string;
 };
 
 function createGeneratedNodeMarkdown(input: GenerateNodeContentInput) {
+  const provenance = input.parentTitle
+    ? `这个主题由「${input.goal}」生成，已经从「${input.parentTitle}」拆成独立子节点。`
+    : `这个主题围绕「${input.goal}」重新生成，作为当前树的根上下文内容。`;
+
   return `## ${input.title}
 
-这个主题由「${input.goal}」生成，已经从「${input.parentTitle}」拆成独立子节点。
+${provenance}
 
 ### 生成结果
 
