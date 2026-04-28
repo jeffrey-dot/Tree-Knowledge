@@ -610,6 +610,11 @@ function TreeCanvas({
   const hoveredNode = hoveredNodeId
     ? nodes.find((node) => node.id === hoveredNodeId)
     : null;
+  const isScaled = Math.abs(zoom - 1) > 0.001;
+  const renderedPan = {
+    x: isScaled ? pan.x : Math.round(pan.x),
+    y: isScaled ? pan.y : Math.round(pan.y),
+  };
   const stageSize = useMemo(
     () =>
       nodes.reduce(
@@ -737,11 +742,16 @@ function TreeCanvas({
       onWheel={handleCanvasWheel}
     >
       <div
-        className="absolute left-0 top-0 origin-top-left will-change-transform"
+        className={cx(
+          "absolute origin-top-left",
+          isScaled && "will-change-transform",
+        )}
         style={{
           width: stageSize.width,
           height: stageSize.height,
-          transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+          left: renderedPan.x,
+          top: renderedPan.y,
+          transform: isScaled ? `scale(${zoom})` : undefined,
         }}
       >
         <svg
