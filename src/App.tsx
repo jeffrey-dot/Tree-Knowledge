@@ -19,6 +19,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { defaultLlmMode, generateNodeContentStream } from "./llm";
 import { nodeDetails, nodes } from "./mockData";
 import type { NodeDetailMock, SourceScope, TreeNode } from "./types";
 
@@ -201,12 +202,6 @@ function createSuggestedTreeNode(
   };
 }
 
-function createSuggestedNodeDetail(suggestion: SuggestedNode, parent: TreeNode): NodeDetailMock {
-  return {
-    content: `## ${suggestion.title}\n\n这个主题由「${suggestion.goal}」生成，已经从「${parent.title}」拆成独立子节点。\n\n主要内容应该在这里沉淀成一段可复用的结论，而不是继续在原节点里追问。真实接入 LLM 后，这里会显示模型针对该主题生成的正文；当前 mock 先用于验证：提问会生成卡片，卡片打开后只呈现主题内容。\n\n- 继承根节点和父链背景\n- 内容只属于当前分支\n- 父节点不会自动读取这里的内容`,
-  };
-}
-
 function createCustomSuggestedNode(input: string): SuggestedNode | null {
   const normalized = input.trim().replace(/\s+/g, " ");
   if (!normalized) return null;
@@ -297,6 +292,9 @@ function App() {
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>(nodes);
   const [nodeDetailMap, setNodeDetailMap] =
     useState<Record<string, NodeDetailMock>>(nodeDetails);
+  const [generatingNodeIds, setGeneratingNodeIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [activeNodeId, setActiveNodeId] = useState("ui");
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
   const [showContext, setShowContext] = useState(false);
@@ -316,6 +314,33 @@ function App() {
     setDetailNodeId(nodeId);
   }
 
+  function streamGeneratedNodeContent(nodeId: string, suggestion: SuggestedNode, parent: TreeNode) {
+    setGeneratingNodeIds((currentIds) => new Set(currentIds).add(nodeId));
+
+    void (async () => {
+      try {
+        for await (const chunk of generateNodeContentStream({
+          title: suggestion.title,
+          goal: suggestion.goal,
+          parentTitle: parent.title,
+        })) {
+          setNodeDetailMap((currentDetails) => ({
+            ...currentDetails,
+            [nodeId]: {
+              content: `${currentDetails[nodeId]?.content ?? ""}${chunk}`,
+            },
+          }));
+        }
+      } finally {
+        setGeneratingNodeIds((currentIds) => {
+          const nextIds = new Set(currentIds);
+          nextIds.delete(nodeId);
+          return nextIds;
+        });
+      }
+    })();
+  }
+
   function handleCreateSuggestedNode(parentId: string, suggestion: SuggestedNode) {
     const parent = treeNodes.find((node) => node.id === parentId);
     if (!parent) return;
@@ -325,10 +350,11 @@ function App() {
     setTreeNodes((currentNodes) => [...currentNodes, nextNode]);
     setNodeDetailMap((currentDetails) => ({
       ...currentDetails,
-      [nextNode.id]: createSuggestedNodeDetail(suggestion, parent),
+      [nextNode.id]: { content: "" },
     }));
     setActiveNodeId(nextNode.id);
     setDetailNodeId(nextNode.id);
+    streamGeneratedNodeContent(nextNode.id, suggestion, parent);
   }
 
   return (
@@ -363,7 +389,7 @@ function App() {
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[#dad4c8] bg-white px-2.5 py-[7px] text-xs font-semibold text-[#55534e]">
             <Sparkles size={14} aria-hidden="true" />
-            OpenAI 兼容接口待接入
+            LLM 默认{defaultLlmMode === "stream" ? "流式" : "同步"}输出
           </span>
           <button className={iconButtonClass} aria-label="设置">
             <Settings size={17} />
@@ -393,6 +419,7 @@ function App() {
           {detailNode ? (
             <NodeDetailDialog
               detailMap={nodeDetailMap}
+              isGenerating={generatingNodeIds.has(detailNode.id)}
               node={detailNode}
               onClose={() => setDetailNodeId(null)}
             />
@@ -706,7 +733,25 @@ function SuggestedNodesPopover({
   suggestions: SuggestedNode[];
 }) {
   const customInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const pointerActivationRef = useRef(false);
   const customInputId = `custom-suggestion-${node.id}`;
+
+  function runPointerAction(action: () => void) {
+    pointerActivationRef.current = true;
+    action();
+    window.setTimeout(() => {
+      pointerActivationRef.current = false;
+    }, 0);
+  }
+
+  function runClickAction(action: () => void) {
+    if (pointerActivationRef.current) {
+      pointerActivationRef.current = false;
+      return;
+    }
+
+    action();
+  }
 
   function getCustomInputValue() {
     const domInput = document.getElementById(customInputId);
@@ -740,12 +785,12 @@ function SuggestedNodesPopover({
             className={getSuggestedNodeClass(suggestion.kind)}
             key={suggestion.title}
             type="button"
-            onMouseDown={(event) => {
+            onPointerDown={(event) => {
               event.preventDefault();
-              onCreate(suggestion);
+              runPointerAction(() => onCreate(suggestion));
             }}
-            onClick={(event) => {
-              if (event.detail === 0) onCreate(suggestion);
+            onClick={() => {
+              runClickAction(() => onCreate(suggestion));
             }}
           >
             <span className="text-[10px] font-extrabold text-[#9f9b93]">
@@ -784,12 +829,12 @@ function SuggestedNodesPopover({
           <button
             className="inline-flex min-h-7 items-center justify-center gap-[5px] rounded-lg border border-black bg-[#fbbd41] text-xs font-extrabold text-black"
             type="button"
-            onMouseDown={(event) => {
+            onPointerDown={(event) => {
               event.preventDefault();
-              onCreateCustom(getCustomInputValue());
+              runPointerAction(() => onCreateCustom(getCustomInputValue()));
             }}
-            onClick={(event) => {
-              if (event.detail === 0) onCreateCustom(getCustomInputValue());
+            onClick={() => {
+              runClickAction(() => onCreateCustom(getCustomInputValue()));
             }}
           >
             <Plus size={13} />
@@ -890,10 +935,12 @@ function ContextGroup({
 
 function NodeDetailDialog({
   detailMap,
+  isGenerating,
   node,
   onClose,
 }: {
   detailMap: Record<string, NodeDetailMock>;
+  isGenerating: boolean;
   node: TreeNode;
   onClose: () => void;
 }) {
@@ -931,6 +978,12 @@ function NodeDetailDialog({
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            {isGenerating ? (
+              <span className="inline-flex min-h-[30px] items-center gap-1.5 rounded-full border border-[#dad4c8] bg-[#fff8e5] px-2.5 text-xs font-extrabold text-black">
+                <Sparkles size={13} aria-hidden="true" />
+                流式生成中
+              </span>
+            ) : null}
             <button
               className={cx(iconButtonClass, "h-[30px] w-[30px]")}
               aria-label="关闭详情"
@@ -941,10 +994,19 @@ function NodeDetailDialog({
           </div>
         </div>
 
-        <article className="px-0.5 pb-0.5 pt-1">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-            {detail.content}
-          </ReactMarkdown>
+        <article className="px-0.5 pb-0.5 pt-1" aria-live="polite">
+          {detail.content ? (
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+              {detail.content}
+            </ReactMarkdown>
+          ) : (
+            <div className="rounded-lg border border-dashed border-[#dad4c8] bg-[#fffdf9] p-3 text-sm font-semibold text-[#55534e]">
+              正在把新问题总结成主题正文...
+            </div>
+          )}
+          {isGenerating && detail.content ? (
+            <span className="mt-1 inline-block h-4 w-2 animate-pulse rounded-sm bg-[#fbbd41]" />
+          ) : null}
         </article>
       </section>
     </div>
