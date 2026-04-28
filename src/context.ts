@@ -1,7 +1,7 @@
 import type {
   CompiledContextPreview,
   ContextPreviewSource,
-  NodeDetailMock,
+  NodeDetail,
   RetrievalHit,
   TreeNode,
 } from "./types";
@@ -9,7 +9,7 @@ import type {
 type BuildContextPreviewInput = {
   activeNode: TreeNode;
   allNodes: TreeNode[];
-  detailMap: Record<string, NodeDetailMock>;
+  detailMap: Record<string, NodeDetail>;
   parentChain: TreeNode[];
   retrievalHits: RetrievalHit[];
 };
@@ -37,7 +37,7 @@ function createSummaryItem(node: TreeNode, isCurrent: boolean): ContextPreviewSo
 
 function createCurrentContentItem(
   node: TreeNode,
-  detail?: NodeDetailMock,
+  detail?: NodeDetail,
 ): ContextPreviewSource | null {
   const content = detail?.content.trim();
   if (!content) return null;

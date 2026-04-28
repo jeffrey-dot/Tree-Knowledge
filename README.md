@@ -17,19 +17,20 @@
 
 ## 仓库状态
 
-仓库目前包含第一版 mock 桌面工作台：
+仓库目前包含第一版桌面工作台：
 
 - Vite + React + TypeScript 实现树形知识画布。
 - Tauri 2 作为桌面端外壳。
-- 当前只使用 mock 数据，用于验证交互和视觉方向。
+- 当前树数据仍是内存 seed 数据，SQLite 持久化尚未接入。
+- 节点内容生成已经接入 OpenAI 兼容的流式 chat API。
 
 后续实现目标仍然是：
 
 - SQLite 作为本地持久化。
 - 本地向量索引或 SQLite 向量扩展用于检索。
-- OpenAI 兼容的 chat 和 embedding API。
+- OpenAI 兼容的 embedding API。
 
-## 运行 Web Mock
+## 运行 Web 工作台
 
 ```bash
 npm install

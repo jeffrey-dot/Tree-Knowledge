@@ -6,9 +6,10 @@ The product exists to solve a specific problem: linear LLM chats make context ha
 
 ## Current Repository State
 
-- The repository now contains a first-pass mock desktop application.
+- The repository now contains a first-pass desktop workbench with in-memory seed data.
 - The UI is implemented with Vite, React, TypeScript, and Tauri.
-- Current data is mock-only; there is no SQLite persistence or LLM integration yet.
+- SQLite persistence is not implemented yet.
+- Node content generation is wired to an OpenAI-compatible streaming chat API, with runtime settings stored locally for the current web build.
 - Product and architecture decisions still live in `docs/`.
 - Keep this file aligned as the implementation changes.
 

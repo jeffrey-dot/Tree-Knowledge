@@ -20,7 +20,7 @@ export type TreeNode = {
   merged: number;
 };
 
-export type NodeDetailMock = {
+export type NodeDetail = {
   content: string;
 };
 

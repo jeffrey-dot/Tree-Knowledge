@@ -26,13 +26,16 @@ import {
 import {
   defaultLlmMode,
   generateNodeContentStream,
+  loadLlmSettings,
+  saveLlmSettings,
   type GenerateNodeContentInput,
+  type LlmSettings,
 } from "./llm";
 import { buildContextPreview } from "./context";
-import { nodeDetails, nodes, retrievalHits } from "./mockData";
+import { nodeDetails, nodes, retrievalHits } from "./seedData";
 import type {
   ContextPreviewSource,
-  NodeDetailMock,
+  NodeDetail,
   SourceScope,
   TreeNode,
 } from "./types";
@@ -321,10 +324,39 @@ function createCustomSuggestedNode(input: string): SuggestedNode | null {
   };
 }
 
-function getFallbackNodeDetail(node: TreeNode): NodeDetailMock {
+function getFallbackNodeDetail(node: TreeNode): NodeDetail {
   return {
-    content: `${node.summary}\n\n这个节点还没有更完整的正文 mock。真实版本会在创建节点时保存生成内容，并在这里直接展示主题正文。`,
+    content: `${node.summary}\n\n这个节点还没有生成过正文。配置 LLM 后，可以用右上角按钮重新生成内容。`,
   };
+}
+
+function getGenerationContextSummaries(node: TreeNode, allNodes: TreeNode[]) {
+  return getParentChain(node, allNodes).map((chainNode) => ({
+    summary: chainNode.summary,
+    title: chainNode.title,
+  }));
+}
+
+function createSummaryFromMarkdown(markdown: string) {
+  const contentLine = markdown
+    .split(/\n+/)
+    .filter((line) => !line.trim().startsWith("#"))
+    .map((line) =>
+      line
+        .replace(/^[-*]\s+/, "")
+        .replace(/\*\*([^*]+)\*\*/g, "$1")
+        .replace(/`([^`]+)`/g, "$1")
+        .trim(),
+    )
+    .find(
+      (line) =>
+        line &&
+        !line.startsWith(">") &&
+        !line.startsWith("|") &&
+        !line.startsWith("```"),
+    );
+
+  return contentLine ? contentLine.slice(0, 86) : "";
 }
 
 const markdownComponents = {
@@ -395,13 +427,17 @@ function App() {
     layoutTreeNodes(nodes),
   );
   const [nodeDetailMap, setNodeDetailMap] =
-    useState<Record<string, NodeDetailMock>>(nodeDetails);
+    useState<Record<string, NodeDetail>>(nodeDetails);
   const [generatingNodeIds, setGeneratingNodeIds] = useState<Set<string>>(
     () => new Set(),
+  );
+  const [llmSettings, setLlmSettings] = useState<LlmSettings>(() =>
+    loadLlmSettings(),
   );
   const [activeNodeId, setActiveNodeId] = useState("ui");
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
   const [showContext, setShowContext] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const generationRunIds = useRef<Record<string, number>>({});
 
   const activeNode = treeNodes.find((node) => node.id === activeNodeId) ?? treeNodes[0];
@@ -433,10 +469,13 @@ function App() {
     }));
 
     void (async () => {
+      let generatedContent = "";
+
       try {
-        for await (const chunk of generateNodeContentStream(input)) {
+        for await (const chunk of generateNodeContentStream(input, llmSettings)) {
           if (generationRunIds.current[nodeId] !== runId) return;
 
+          generatedContent += chunk;
           setNodeDetailMap((currentDetails) => ({
             ...currentDetails,
             [nodeId]: {
@@ -444,6 +483,29 @@ function App() {
             },
           }));
         }
+
+        const generatedSummary = createSummaryFromMarkdown(generatedContent);
+        if (generatedSummary) {
+          setTreeNodes((currentNodes) =>
+            currentNodes.map((node) =>
+              node.id === nodeId
+                ? { ...node, materials: Math.max(node.materials, 1), summary: generatedSummary }
+                : node,
+            ),
+          );
+        }
+      } catch (error) {
+        if (generationRunIds.current[nodeId] !== runId) return;
+
+        const message =
+          error instanceof Error ? error.message : "LLM 生成失败，请检查模型设置。";
+
+        setNodeDetailMap((currentDetails) => ({
+          ...currentDetails,
+          [nodeId]: {
+            content: `## ${input.title}\n\n> ${message}\n\n请在右上角设置中配置 OpenAI-compatible LLM，然后重新生成这个节点。`,
+          },
+        }));
       } finally {
         if (generationRunIds.current[nodeId] !== runId) return;
 
@@ -467,6 +529,7 @@ function App() {
     setActiveNodeId(nextNode.id);
     setDetailNodeId(nextNode.id);
     streamGeneratedNodeContent(nextNode.id, {
+      contextSummaries: getGenerationContextSummaries(parent, treeNodes),
       title: suggestion.title,
       goal: suggestion.goal,
       parentTitle: parent.title,
@@ -479,10 +542,19 @@ function App() {
       : null;
 
     streamGeneratedNodeContent(node.id, {
+      contextSummaries: parent
+        ? getGenerationContextSummaries(parent, treeNodes)
+        : [],
       title: node.title,
       goal: node.goal,
       parentTitle: parent?.title,
     });
+  }
+
+  function handleSaveLlmSettings(settings: LlmSettings) {
+    saveLlmSettings(settings);
+    setLlmSettings(settings);
+    setShowSettings(false);
   }
 
   return (
@@ -498,7 +570,7 @@ function App() {
             <GitBranch size={18} aria-hidden="true" />
           </div>
           <div>
-            <div className={eyebrowClass}>本地模拟工作台</div>
+            <div className={eyebrowClass}>本地 LLM 工作台</div>
             <h1 className="m-0 text-2xl leading-[1.2] tracking-[0]">树形知识库</h1>
           </div>
         </div>
@@ -517,9 +589,13 @@ function App() {
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[#dad4c8] bg-white px-2.5 py-[7px] text-xs font-semibold text-[#55534e]">
             <Sparkles size={14} aria-hidden="true" />
-            LLM 默认{defaultLlmMode === "stream" ? "流式" : "同步"}输出
+            {llmSettings.apiKey ? llmSettings.model : "LLM 未配置"} · {defaultLlmMode === "stream" ? "流式" : "同步"}
           </span>
-          <button className={iconButtonClass} aria-label="设置">
+          <button
+            className={iconButtonClass}
+            aria-label="设置"
+            onClick={() => setShowSettings(true)}
+          >
             <Settings size={17} />
           </button>
         </div>
@@ -556,6 +632,13 @@ function App() {
               node={detailNode}
               onClose={() => setDetailNodeId(null)}
               onRegenerate={handleRegenerateNodeContent}
+            />
+          ) : null}
+          {showSettings ? (
+            <LlmSettingsDialog
+              initialSettings={llmSettings}
+              onClose={() => setShowSettings(false)}
+              onSave={handleSaveLlmSettings}
             />
           ) : null}
         </section>
@@ -1035,7 +1118,7 @@ function ContextPreview({
   parentChain,
 }: {
   activeNode: TreeNode;
-  detailMap: Record<string, NodeDetailMock>;
+  detailMap: Record<string, NodeDetail>;
   nodes: TreeNode[];
   parentChain: TreeNode[];
 }) {
@@ -1164,6 +1247,109 @@ function ContextPreviewCard({ item }: { item: ContextPreviewSource }) {
   );
 }
 
+function LlmSettingsDialog({
+  initialSettings,
+  onClose,
+  onSave,
+}: {
+  initialSettings: LlmSettings;
+  onClose: () => void;
+  onSave: (settings: LlmSettings) => void;
+}) {
+  const [draftSettings, setDraftSettings] = useState(initialSettings);
+
+  function updateDraft(field: keyof LlmSettings, value: string) {
+    setDraftSettings((currentSettings) => ({
+      ...currentSettings,
+      [field]: value,
+    }));
+  }
+
+  return (
+    <div
+      className="absolute inset-0 z-30 grid place-items-center bg-[#faf9f7]/[0.34] px-7 py-[72px] backdrop-blur-[2px] max-[760px]:fixed max-[760px]:px-3 max-[760px]:py-6"
+      role="presentation"
+      onClick={onClose}
+    >
+      <section
+        className={cx(
+          "w-[min(520px,100%)] rounded-xl border border-black bg-white/[0.98] p-4",
+          hardShadow,
+        )}
+        data-pan-lock
+        data-wheel-lock
+        role="dialog"
+        aria-modal="true"
+        aria-label="LLM 设置"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <div className={eyebrowClass}>OpenAI-compatible</div>
+            <h2 className="mb-1.5 mt-2 text-2xl leading-[1.2] tracking-[0]">
+              LLM 设置
+            </h2>
+          </div>
+          <button
+            className={cx(iconButtonClass, "h-[30px] w-[30px]")}
+            aria-label="关闭设置"
+            onClick={onClose}
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="grid gap-3">
+          <label className="grid gap-1.5 text-sm font-bold text-black">
+            Base URL
+            <input
+              className="h-10 rounded-lg border border-[#dad4c8] bg-white px-3 text-sm font-normal text-black outline-0"
+              value={draftSettings.baseUrl}
+              placeholder="https://api.openai.com/v1"
+              onChange={(event) => updateDraft("baseUrl", event.target.value)}
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-bold text-black">
+            Model
+            <input
+              className="h-10 rounded-lg border border-[#dad4c8] bg-white px-3 text-sm font-normal text-black outline-0"
+              value={draftSettings.model}
+              placeholder="gpt-5.2"
+              onChange={(event) => updateDraft("model", event.target.value)}
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm font-bold text-black">
+            API Key
+            <input
+              className="h-10 rounded-lg border border-[#dad4c8] bg-white px-3 text-sm font-normal text-black outline-0"
+              value={draftSettings.apiKey}
+              placeholder="sk-..."
+              type="password"
+              onChange={(event) => updateDraft("apiKey", event.target.value)}
+            />
+          </label>
+          <div className="rounded-lg border border-[#eee9df] bg-[#fff8e5] px-3 py-2 text-xs font-semibold leading-[1.45] text-[#55534e]">
+            这些设置只用于节点内容生成。当前版本先存在本地浏览器存储里，后续 Tauri 版本会迁移到系统凭据存储。
+          </div>
+          <button
+            className="inline-flex min-h-9 items-center justify-center rounded-lg border border-black bg-[#fbbd41] px-3 text-sm font-extrabold text-black"
+            type="button"
+            onClick={() =>
+              onSave({
+                apiKey: draftSettings.apiKey.trim(),
+                baseUrl: draftSettings.baseUrl.trim(),
+                model: draftSettings.model.trim(),
+              })
+            }
+          >
+            保存设置
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function NodeDetailDialog({
   detailMap,
   isGenerating,
@@ -1171,7 +1357,7 @@ function NodeDetailDialog({
   onClose,
   onRegenerate,
 }: {
-  detailMap: Record<string, NodeDetailMock>;
+  detailMap: Record<string, NodeDetail>;
   isGenerating: boolean;
   node: TreeNode;
   onClose: () => void;
