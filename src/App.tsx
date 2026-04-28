@@ -1021,13 +1021,14 @@ function NodeDetailDialog({
             ) : null}
             <button
               className={cx(
-                "inline-flex min-h-[30px] items-center justify-center gap-1.5 rounded-lg border border-[#dad4c8] bg-white px-2.5 text-xs font-extrabold text-black",
+                "inline-grid h-[30px] w-[30px] place-items-center rounded-lg border border-[#dad4c8] bg-white text-black",
                 "transition-[transform,box-shadow,opacity] duration-[120ms] ease-[ease] hover:-translate-y-px",
                 hardShadowHover,
                 isGenerating && "cursor-not-allowed opacity-55 hover:translate-y-0",
               )}
               type="button"
               aria-label="重新生成节点内容"
+              title="重新生成节点内容"
               disabled={isGenerating}
               onClick={() => onRegenerate(node)}
             >
@@ -1036,7 +1037,6 @@ function NodeDetailDialog({
                 size={13}
                 aria-hidden="true"
               />
-              重新生成
             </button>
             <button
               className={cx(iconButtonClass, "h-[30px] w-[30px]")}
