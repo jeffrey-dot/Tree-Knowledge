@@ -47,3 +47,26 @@ export type CompletionSuggestion = {
   relation: "child" | "sibling" | "parent";
   rationale: string;
 };
+
+export type ContextSourceType =
+  | "summary"
+  | "content"
+  | "retrieval-hit"
+  | "excluded-branch";
+
+export type ContextPreviewSource = {
+  id: string;
+  type: ContextSourceType;
+  scope: SourceScope;
+  title: string;
+  content: string;
+  reason: string;
+  nodeId?: string;
+};
+
+export type CompiledContextPreview = {
+  nodeId: string;
+  includedItems: ContextPreviewSource[];
+  excludedItems: ContextPreviewSource[];
+  tokenEstimate: number;
+};

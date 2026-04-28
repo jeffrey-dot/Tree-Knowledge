@@ -28,8 +28,14 @@ import {
   generateNodeContentStream,
   type GenerateNodeContentInput,
 } from "./llm";
-import { nodeDetails, nodes } from "./mockData";
-import type { NodeDetailMock, SourceScope, TreeNode } from "./types";
+import { buildContextPreview } from "./context";
+import { nodeDetails, nodes, retrievalHits } from "./mockData";
+import type {
+  ContextPreviewSource,
+  NodeDetailMock,
+  SourceScope,
+  TreeNode,
+} from "./types";
 
 const scopeLabel: Record<SourceScope, string> = {
   current: "当前",
@@ -51,6 +57,13 @@ const kindLabel: Record<TreeNode["kind"], string> = {
   temporary: "临时",
   research: "研究",
   decision: "决策",
+};
+
+const contextSourceTypeLabel: Record<ContextPreviewSource["type"], string> = {
+  summary: "摘要",
+  content: "正文",
+  "retrieval-hit": "检索",
+  "excluded-branch": "分支",
 };
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -529,7 +542,12 @@ function App() {
             onSelectNode={handleSelectNode}
           />
           {showContext ? (
-            <ContextPreview activeNode={activeNode} parentChain={parentChain} />
+            <ContextPreview
+              activeNode={activeNode}
+              detailMap={nodeDetailMap}
+              nodes={treeNodes}
+              parentChain={parentChain}
+            />
           ) : null}
           {detailNode ? (
             <NodeDetailDialog
@@ -1012,17 +1030,31 @@ function SuggestedNodesPopover({
 
 function ContextPreview({
   activeNode,
+  detailMap,
+  nodes,
   parentChain,
 }: {
   activeNode: TreeNode;
+  detailMap: Record<string, NodeDetailMock>;
+  nodes: TreeNode[];
   parentChain: TreeNode[];
 }) {
-  const ancestors = parentChain.slice(0, -1);
+  const compiledContext = useMemo(
+    () =>
+      buildContextPreview({
+        activeNode,
+        allNodes: nodes,
+        detailMap,
+        parentChain,
+        retrievalHits,
+      }),
+    [activeNode, detailMap, nodes, parentChain],
+  );
 
   return (
     <div
       className={cx(
-        "absolute bottom-[18px] right-[18px] z-[6] max-h-[min(360px,calc(100%_-_110px))] w-[min(720px,calc(100%_-_390px))] overflow-auto rounded-xl border border-black bg-white/[0.94] p-3.5",
+        "absolute bottom-[18px] right-[18px] z-[6] max-h-[min(520px,calc(100%_-_110px))] w-[min(820px,calc(100%_-_390px))] overflow-auto rounded-xl border border-black bg-white/[0.94] p-3.5",
         "max-[1180px]:w-[min(680px,calc(100%_-_40px))] max-[760px]:static max-[760px]:m-3 max-[760px]:w-auto",
         hardShadow,
       )}
@@ -1033,66 +1065,101 @@ function ContextPreview({
         <div>
           <div className={eyebrowClass}>提示词上下文预览</div>
           <h2 className="m-0 text-lg leading-[1.2] tracking-[0]">
-            LLM 将看到的内容
+            {activeNode.title} 将发送的上下文
           </h2>
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-[#dad4c8] bg-white px-2.5 py-[7px] text-xs font-semibold text-[#55534e]">
-          约 4.8k token
+          约 {compiledContext.tokenEstimate.toLocaleString("zh-CN")} token
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 max-[760px]:grid-cols-1">
-        <ContextGroup
-          scope="parent"
-          title="根节点 + 父链摘要"
-          items={ancestors.map((node) => node.summary)}
+      <div className="grid grid-cols-[1.08fr_0.92fr] gap-2.5 max-[760px]:grid-cols-1">
+        <ContextPreviewList
+          eyebrow="自动纳入"
+          emptyText="当前没有可纳入的上下文。"
+          items={compiledContext.includedItems}
+          title="LLM 会看到"
         />
-        <ContextGroup
-          scope="current"
-          title="当前节点"
-          items={[
-            activeNode.summary,
-            "最近的当前节点素材和当前节点检索结果。",
-          ]}
+        <ContextPreviewList
+          eyebrow="边界检查"
+          emptyText="没有被排除的来源。"
+          items={compiledContext.excludedItems}
+          title="不会自动进入"
         />
-        <ContextGroup
-          scope="web"
-          title="已选择的外部来源"
-          items={["1 个已确认网页来源可进入上下文；待确认网页来源被排除。"]}
-        />
-        <ContextGroup
-          scope="excluded"
-          title="按规则排除"
-          items={[
-            "兄弟分支在画布中可见，但不会自动进入上下文。",
-            "已归档的团队同步节点不会进入自动上下文。",
-          ]}
-        />
+      </div>
+
+      <div className="mt-2.5 rounded-lg border border-[#eee9df] bg-[#fff8e5] px-3 py-2 text-xs font-semibold leading-[1.45] text-[#55534e]">
+        自动上下文只包含根节点、父链和当前节点。全局、网页、兄弟、子分支和归档内容必须由用户显式选择后才会进入。
       </div>
     </div>
   );
 }
 
-function ContextGroup({
-  scope,
-  title,
+function ContextPreviewList({
+  emptyText,
+  eyebrow,
   items,
+  title,
 }: {
-  scope: SourceScope;
+  emptyText: string;
+  eyebrow: string;
+  items: ContextPreviewSource[];
   title: string;
-  items: string[];
 }) {
+  const visibleItems = items.slice(0, 7);
+  const hiddenCount = items.length - visibleItems.length;
+
   return (
-    <article className="rounded-lg border border-[#dad4c8] bg-white p-2.5">
-      <span className={getScopeBadgeClass(scope)}>{scopeLabel[scope]}</span>
-      <h3 className="mb-[5px] mt-[7px] text-[13px] leading-[1.25]">{title}</h3>
-      <ul className="m-0 pl-4 [&>li+li]:mt-[5px]">
-        {items.map((item) => (
-          <li className="m-0 text-[13px] leading-[1.45] text-[#55534e]" key={item}>
-            {item}
-          </li>
+    <section className="min-h-0 rounded-lg border border-[#dad4c8] bg-white p-2.5">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div>
+          <div className={eyebrowClass}>{eyebrow}</div>
+          <h3 className="m-0 text-[14px] leading-[1.25]">{title}</h3>
+        </div>
+        <span className="rounded-full border border-[#eee9df] bg-[#faf9f7] px-2 py-1 text-[11px] font-extrabold text-[#55534e]">
+          {items.length}
+        </span>
+      </div>
+      <div className="grid gap-2">
+        {visibleItems.map((item) => (
+          <ContextPreviewCard item={item} key={item.id} />
         ))}
-      </ul>
+        {hiddenCount > 0 ? (
+          <div className="rounded-lg border border-dashed border-[#dad4c8] bg-[#faf9f7] px-2.5 py-2 text-xs font-semibold text-[#55534e]">
+            还有 {hiddenCount} 条来源，保持排除状态但可被用户检查。
+          </div>
+        ) : null}
+        {items.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-[#dad4c8] bg-[#faf9f7] px-2.5 py-2 text-xs font-semibold text-[#55534e]">
+            {emptyText}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ContextPreviewCard({ item }: { item: ContextPreviewSource }) {
+  return (
+    <article
+      className={cx(
+        "rounded-lg border border-[#eee9df] bg-white px-2.5 py-2",
+        item.scope === "excluded" && "bg-[#faf9f7]",
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className={getScopeBadgeClass(item.scope)}>{scopeLabel[item.scope]}</span>
+        <span className="rounded-full bg-[#eee9df] px-1.5 py-[3px] text-[10px] font-extrabold leading-none text-[#55534e]">
+          {contextSourceTypeLabel[item.type]}
+        </span>
+      </div>
+      <h4 className="mb-1 mt-1.5 text-[13px] leading-[1.25]">{item.title}</h4>
+      <p className="m-0 overflow-hidden text-xs leading-[1.45] text-[#55534e] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">
+        {item.content}
+      </p>
+      <p className="mb-0 mt-1.5 text-[11px] font-semibold leading-[1.35] text-[#9f9b93]">
+        {item.reason}
+      </p>
     </article>
   );
 }
