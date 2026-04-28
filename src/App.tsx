@@ -749,125 +749,131 @@ function TreeCanvas({
       <div
         className="absolute origin-top-left"
         style={{
-          width: stageSize.width,
-          height: stageSize.height,
           left: renderedPan.x,
           top: renderedPan.y,
-          zoom,
         }}
       >
-        <svg
-          className="pointer-events-none absolute left-7 top-[86px]"
-          viewBox={`0 0 ${stageSize.width} ${stageSize.height}`}
-          aria-hidden="true"
-          style={{ width: stageSize.width, height: stageSize.height }}
+        <div
+          className="relative origin-top-left"
+          style={{
+            width: stageSize.width,
+            height: stageSize.height,
+            zoom,
+          }}
         >
-          {nodes
-            .filter((node) => node.parentId)
-            .map((node) => {
-              const parent = byId.get(node.parentId!);
-              if (!parent) return null;
-
-              const isActiveEdge =
-                parentChainIds.has(node.id) && parentChainIds.has(parent.id);
-              const isTemporary = node.kind === "temporary";
-              const startX = parent.x + 220;
-              const startY = parent.y + 52;
-              const endX = node.x;
-              const endY = node.y + 52;
-              const midX = startX + (endX - startX) / 2;
-
-              return (
-                <path
-                  key={`${parent.id}-${node.id}`}
-                  className={cx(
-                    "fill-none stroke-[#dad4c8] stroke-[1.5]",
-                    isActiveEdge && "stroke-[#fbbd41] stroke-[3]",
-                    isTemporary && "[stroke-dasharray:8_7] stroke-[#0089ad]",
-                  )}
-                  d={`M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`}
-                />
-              );
-            })}
-        </svg>
-
-        {nodes.map((node) => (
-          <button
-            className={cx(
-              "absolute min-h-[108px] w-[220px] rounded-lg border border-[#dad4c8] bg-white/[0.92] p-3 text-left text-black",
-              "transition-[left,top,transform,box-shadow,border-color,opacity] duration-[180ms] ease-[ease] hover:-translate-y-0.5",
-              hardShadowHover,
-              node.id === activeNodeId && "border-2 border-black bg-white",
-              parentChainIds.has(node.id) &&
-                node.id !== activeNodeId &&
-                "border-[#fbbd41] bg-[#fff8e5]",
-              node.kind === "temporary" && "border-dashed",
-              node.status === "archived" && "opacity-[0.45]",
-              clayShadow,
-            )}
-            key={node.id}
-            style={{ left: node.x, top: node.y }}
-            type="button"
-            onMouseEnter={() => setHoveredNodeId(node.id)}
-            onFocus={() => setHoveredNodeId(node.id)}
-            onClick={() => onSelectNode(node.id)}
+          <svg
+            className="pointer-events-none absolute left-7 top-[86px]"
+            viewBox={`0 0 ${stageSize.width} ${stageSize.height}`}
+            aria-hidden="true"
+            style={{ width: stageSize.width, height: stageSize.height }}
           >
-            <div className="mb-2 flex justify-between gap-2">
-              <span className={cx(smallPillClass, "bg-[#eee9df] text-[#55534e]")}>
-                {kindLabel[node.kind]}
-              </span>
-              <span
-                className={cx(
-                  smallPillClass,
-                  "border border-[#dad4c8] bg-white",
-                  node.status === "done" && "bg-[#84e7a5]",
-                )}
-              >
-                {statusLabel[node.status]}
-              </span>
-            </div>
-            <strong className="block text-sm leading-[1.25]">{node.title}</strong>
-            <p className="mb-2.5 mt-[7px] overflow-hidden text-xs leading-[1.35] text-[#55534e] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
-              {node.summary}
-            </p>
-            <div className="flex flex-wrap gap-[5px]">
-              <span className={nodeBadgeClass}>
-                <Sparkles size={11} />
-                {node.materials}
-              </span>
-              <span className={nodeBadgeClass}>
-                <FileText size={11} />
-                {node.references}
-              </span>
-              {node.webSources > 0 ? (
+            {nodes
+              .filter((node) => node.parentId)
+              .map((node) => {
+                const parent = byId.get(node.parentId!);
+                if (!parent) return null;
+
+                const isActiveEdge =
+                  parentChainIds.has(node.id) && parentChainIds.has(parent.id);
+                const isTemporary = node.kind === "temporary";
+                const startX = parent.x + 220;
+                const startY = parent.y + 52;
+                const endX = node.x;
+                const endY = node.y + 52;
+                const midX = startX + (endX - startX) / 2;
+
+                return (
+                  <path
+                    key={`${parent.id}-${node.id}`}
+                    className={cx(
+                      "fill-none stroke-[#dad4c8] stroke-[1.5]",
+                      isActiveEdge && "stroke-[#fbbd41] stroke-[3]",
+                      isTemporary && "[stroke-dasharray:8_7] stroke-[#0089ad]",
+                    )}
+                    d={`M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`}
+                  />
+                );
+              })}
+          </svg>
+
+          {nodes.map((node) => (
+            <button
+              className={cx(
+                "absolute min-h-[108px] w-[220px] rounded-lg border border-[#dad4c8] bg-white/[0.92] p-3 text-left text-black",
+                "transition-[left,top,transform,box-shadow,border-color,opacity] duration-[180ms] ease-[ease] hover:-translate-y-0.5",
+                hardShadowHover,
+                node.id === activeNodeId && "border-2 border-black bg-white",
+                parentChainIds.has(node.id) &&
+                  node.id !== activeNodeId &&
+                  "border-[#fbbd41] bg-[#fff8e5]",
+                node.kind === "temporary" && "border-dashed",
+                node.status === "archived" && "opacity-[0.45]",
+                clayShadow,
+              )}
+              key={node.id}
+              style={{ left: node.x, top: node.y }}
+              type="button"
+              onMouseEnter={() => setHoveredNodeId(node.id)}
+              onFocus={() => setHoveredNodeId(node.id)}
+              onClick={() => onSelectNode(node.id)}
+            >
+              <div className="mb-2 flex justify-between gap-2">
+                <span className={cx(smallPillClass, "bg-[#eee9df] text-[#55534e]")}>
+                  {kindLabel[node.kind]}
+                </span>
+                <span
+                  className={cx(
+                    smallPillClass,
+                    "border border-[#dad4c8] bg-white",
+                    node.status === "done" && "bg-[#84e7a5]",
+                  )}
+                >
+                  {statusLabel[node.status]}
+                </span>
+              </div>
+              <strong className="block text-sm leading-[1.25]">{node.title}</strong>
+              <p className="mb-2.5 mt-[7px] overflow-hidden text-xs leading-[1.35] text-[#55534e] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                {node.summary}
+              </p>
+              <div className="flex flex-wrap gap-[5px]">
+                <span className={nodeBadgeClass}>
+                  <Sparkles size={11} />
+                  {node.materials}
+                </span>
                 <span className={nodeBadgeClass}>
                   <FileText size={11} />
-                  {node.webSources}
+                  {node.references}
                 </span>
-              ) : null}
-              {node.merged > 0 ? (
-                <span className={nodeBadgeClass}>
-                  <Merge size={11} />
-                  {node.merged}
-                </span>
-              ) : null}
-            </div>
-          </button>
-        ))}
+                {node.webSources > 0 ? (
+                  <span className={nodeBadgeClass}>
+                    <FileText size={11} />
+                    {node.webSources}
+                  </span>
+                ) : null}
+                {node.merged > 0 ? (
+                  <span className={nodeBadgeClass}>
+                    <Merge size={11} />
+                    {node.merged}
+                  </span>
+                ) : null}
+              </div>
+            </button>
+          ))}
 
-        {hoveredNode ? (
-          <SuggestedNodesPopover
-            node={hoveredNode}
-            suggestions={getAvailableSuggestedNodes(hoveredNode, nodes)}
-            customValue={customSuggestion}
-            onCreate={(suggestion) => handleCreateSuggestion(hoveredNode.id, suggestion)}
-            onCreateCustom={(input) =>
-              handleCreateCustomSuggestion(hoveredNode.id, input)
-            }
-            onCustomChange={setCustomSuggestion}
-            onMouseEnter={() => setHoveredNodeId(hoveredNode.id)}
-          />
-        ) : null}
+          {hoveredNode ? (
+            <SuggestedNodesPopover
+              node={hoveredNode}
+              suggestions={getAvailableSuggestedNodes(hoveredNode, nodes)}
+              customValue={customSuggestion}
+              onCreate={(suggestion) => handleCreateSuggestion(hoveredNode.id, suggestion)}
+              onCreateCustom={(input) =>
+                handleCreateCustomSuggestion(hoveredNode.id, input)
+              }
+              onCustomChange={setCustomSuggestion}
+              onMouseEnter={() => setHoveredNodeId(hoveredNode.id)}
+            />
+          ) : null}
+        </div>
       </div>
     </div>
   );
