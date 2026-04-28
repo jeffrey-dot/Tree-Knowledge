@@ -16,7 +16,7 @@ import {
   getAvailableSuggestedNodes,
   type SuggestedNode,
 } from "../domain/nodeSuggestions";
-import type { TreeNode } from "../types";
+import type { NodeDetail, TreeNode } from "../types";
 import { clamp, cx } from "../utils";
 import {
   clayShadow,
@@ -25,20 +25,81 @@ import {
   kindLabel,
   nodeBadgeClass,
   smallPillClass,
-  statusLabel,
 } from "../ui/styleTokens";
 
 type TreeCanvasProps = {
   nodes: TreeNode[];
   activeNodeId: string | null;
+  detailMap: Record<string, NodeDetail>;
+  generatingNodeIds: Set<string>;
   parentChainIds: Set<string>;
   onCreateSuggestedNode: (parentId: string, suggestion: SuggestedNode) => void;
   onSelectNode: (nodeId: string) => void;
 };
 
+function getNodeStatePill({
+  hasContent,
+  hasGeneratedContent,
+  isGenerating,
+  node,
+}: {
+  hasContent: boolean;
+  hasGeneratedContent: boolean;
+  isGenerating: boolean;
+  node: TreeNode;
+}) {
+  if (node.status === "archived") {
+    return {
+      className: "bg-[#eee9df] text-[#55534e]",
+      label: "已归档",
+      title: "这个节点已归档，不会默认进入上下文。",
+    };
+  }
+
+  if (isGenerating) {
+    return {
+      className: "bg-[#f8cc65] text-black",
+      label: "生成中",
+      title: "LLM 正在为这个节点生成内容。",
+    };
+  }
+
+  if (node.status === "done") {
+    return {
+      className: "bg-[#84e7a5] text-black",
+      label: "已完成",
+      title: "这个节点已标记为完成。",
+    };
+  }
+
+  if (hasGeneratedContent) {
+    return {
+      className: "bg-white text-[#55534e]",
+      label: "已生成",
+      title: "这个节点已有内容，当前没有生成任务在运行。",
+    };
+  }
+
+  if (hasContent) {
+    return {
+      className: "bg-white text-[#55534e]",
+      label: "已记录",
+      title: "这个节点已创建，当前没有生成任务在运行。",
+    };
+  }
+
+  return {
+    className: "bg-white text-[#55534e]",
+    label: "待补充",
+    title: "这个节点还没有生成或记录内容。",
+  };
+}
+
 export function TreeCanvas({
   nodes,
   activeNodeId,
+  detailMap,
+  generatingNodeIds,
   parentChainIds,
   onCreateSuggestedNode,
   onSelectNode,
@@ -248,69 +309,80 @@ export function TreeCanvas({
               })}
           </svg>
 
-          {nodes.map((node) => (
-            <button
-              className={cx(
-                "absolute min-h-[108px] w-[220px] rounded-lg border border-[#dad4c8] bg-white/[0.92] p-3 text-left text-black",
-                "transition-[left,top,transform,box-shadow,border-color,opacity] duration-[180ms] ease-[ease] hover:-translate-y-0.5",
-                hardShadowHover,
-                node.id === activeNodeId && "border-2 border-black bg-white",
-                parentChainIds.has(node.id) &&
-                  node.id !== activeNodeId &&
-                  "border-[#fbbd41] bg-[#fff8e5]",
-                node.kind === "temporary" && "border-dashed",
-                node.status === "archived" && "opacity-[0.45]",
-                clayShadow,
-              )}
-              key={node.id}
-              style={{ left: node.x, top: node.y }}
-              type="button"
-              onMouseEnter={() => setHoveredNodeId(node.id)}
-              onFocus={() => setHoveredNodeId(node.id)}
-              onClick={() => onSelectNode(node.id)}
-            >
-              <div className="mb-2 flex justify-between gap-2">
-                <span className={cx(smallPillClass, "bg-[#eee9df] text-[#55534e]")}>
-                  {kindLabel[node.kind]}
-                </span>
-                <span
-                  className={cx(
-                    smallPillClass,
-                    "border border-[#dad4c8] bg-white",
-                    node.status === "done" && "bg-[#84e7a5]",
-                  )}
-                >
-                  {statusLabel[node.status]}
-                </span>
-              </div>
-              <strong className="block text-sm leading-[1.25]">{node.title}</strong>
-              <p className="mb-2.5 mt-[7px] overflow-hidden text-xs leading-[1.35] text-[#55534e] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
-                {node.summary}
-              </p>
-              <div className="flex flex-wrap gap-[5px]">
-                <span className={nodeBadgeClass}>
-                  <Sparkles size={11} />
-                  {node.materials}
-                </span>
-                <span className={nodeBadgeClass}>
-                  <FileText size={11} />
-                  {node.references}
-                </span>
-                {node.webSources > 0 ? (
+          {nodes.map((node) => {
+            const statePill = getNodeStatePill({
+              hasContent:
+                Boolean(detailMap[node.id]?.content.trim()) || node.materials > 0,
+              hasGeneratedContent: node.materials > 0,
+              isGenerating: generatingNodeIds.has(node.id),
+              node,
+            });
+
+            return (
+              <button
+                className={cx(
+                  "absolute min-h-[108px] w-[220px] rounded-lg border border-[#dad4c8] bg-white/[0.92] p-3 text-left text-black",
+                  "transition-[left,top,transform,box-shadow,border-color,opacity] duration-[180ms] ease-[ease] hover:-translate-y-0.5",
+                  hardShadowHover,
+                  node.id === activeNodeId && "border-2 border-black bg-white",
+                  parentChainIds.has(node.id) &&
+                    node.id !== activeNodeId &&
+                    "border-[#fbbd41] bg-[#fff8e5]",
+                  node.kind === "temporary" && "border-dashed",
+                  node.status === "archived" && "opacity-[0.45]",
+                  clayShadow,
+                )}
+                key={node.id}
+                style={{ left: node.x, top: node.y }}
+                type="button"
+                onMouseEnter={() => setHoveredNodeId(node.id)}
+                onFocus={() => setHoveredNodeId(node.id)}
+                onClick={() => onSelectNode(node.id)}
+              >
+                <div className="mb-2 flex justify-between gap-2">
+                  <span className={cx(smallPillClass, "bg-[#eee9df] text-[#55534e]")}>
+                    {kindLabel[node.kind]}
+                  </span>
+                  <span
+                    className={cx(
+                      smallPillClass,
+                      "border border-[#dad4c8]",
+                      statePill.className,
+                    )}
+                    title={statePill.title}
+                  >
+                    {statePill.label}
+                  </span>
+                </div>
+                <strong className="block text-sm leading-[1.25]">{node.title}</strong>
+                <p className="mb-2.5 mt-[7px] overflow-hidden text-xs leading-[1.35] text-[#55534e] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                  {node.summary}
+                </p>
+                <div className="flex flex-wrap gap-[5px]">
+                  <span className={nodeBadgeClass}>
+                    <Sparkles size={11} />
+                    {node.materials}
+                  </span>
                   <span className={nodeBadgeClass}>
                     <FileText size={11} />
-                    {node.webSources}
+                    {node.references}
                   </span>
-                ) : null}
-                {node.merged > 0 ? (
-                  <span className={nodeBadgeClass}>
-                    <Merge size={11} />
-                    {node.merged}
-                  </span>
-                ) : null}
-              </div>
-            </button>
-          ))}
+                  {node.webSources > 0 ? (
+                    <span className={nodeBadgeClass}>
+                      <FileText size={11} />
+                      {node.webSources}
+                    </span>
+                  ) : null}
+                  {node.merged > 0 ? (
+                    <span className={nodeBadgeClass}>
+                      <Merge size={11} />
+                      {node.merged}
+                    </span>
+                  ) : null}
+                </div>
+              </button>
+            );
+          })}
 
           {hoveredNode ? (
             <SuggestedNodesPopover

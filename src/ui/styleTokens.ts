@@ -9,12 +9,6 @@ export const scopeLabel: Record<SourceScope, string> = {
   excluded: "排除",
 };
 
-export const statusLabel: Record<TreeNode["status"], string> = {
-  active: "进行中",
-  done: "已完成",
-  archived: "已归档",
-};
-
 export const kindLabel: Record<TreeNode["kind"], string> = {
   root: "根节点",
   main: "主线",

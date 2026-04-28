@@ -71,6 +71,8 @@ function App() {
             <TreeCanvas
               nodes={workspace.treeNodes}
               activeNodeId={workspace.activeNode?.id ?? null}
+              detailMap={workspace.nodeDetailMap}
+              generatingNodeIds={workspace.generatingNodeIds}
               parentChainIds={workspace.parentChainIds}
               onCreateSuggestedNode={workspace.handleCreateSuggestedNode}
               onSelectNode={workspace.handleSelectNode}

@@ -6,7 +6,9 @@ The product exists to solve a specific problem: linear LLM chats make context ha
 
 ## Current Repository State
 
-- The repository now contains a first-pass desktop workbench with in-memory seed data.
+- The repository now contains a first-pass desktop workbench with an in-memory knowledge-library overview.
+- Users can create multiple in-memory knowledge bases from the overview and open one knowledge base at a time into the tree workspace.
+- Opening persisted knowledge bases from SQLite is not implemented yet.
 - The UI is implemented with Vite, React, TypeScript, and Tauri.
 - SQLite persistence is not implemented yet.
 - Node content generation is wired to an OpenAI-compatible streaming chat API, with runtime settings stored locally for the current web build.
@@ -19,14 +21,14 @@ These rules are more important than implementation convenience:
 
 1. Context is organized as a tree.
 2. Each node represents an independent semantic context.
-3. A conversation at the current node may inherit only:
+3. An LLM context bundle for the current node may inherit only:
    - root node context,
    - parent-chain context,
    - current node context.
 4. A node must not automatically read sibling nodes, uncle nodes, archived nodes, or unrelated branches.
 5. Temporary questions should become child branches instead of polluting the current main line.
-6. Users can continue a conversation from any node.
-7. Users can create a new branch from any message.
+6. Users can reopen any node and generate or refine node content from that node's scoped context.
+7. Users can create a new branch from any node or typed question.
 8. Every node maintains a summary for fast LLM context reconstruction.
 9. Node rename, archive, delete, and merge are first-class operations.
 10. Search can cover current node, parent chain, and global knowledge, but ranking must prefer current node and parent chain by default.
@@ -89,7 +91,7 @@ When implementing UI:
 - Provide an action to inspect the exact context sent to the LLM.
 - Keep the default workspace focused on the tree. Do not add a persistent right-side node detail panel unless the user explicitly asks for it.
 - Node details, summaries, retrieval hits, and node actions should open in a modal/popover after an explicit user action.
-- Node creation should be topic-first: user conversation or a typed question can summarize into a new child node instead of becoming linear chat clutter.
+- Node creation should be topic-first: a typed question or topic can summarize into a new child node instead of becoming linear workspace clutter.
 - Hover affordances may suggest child topics, but users must also be able to write their own question/topic from the same surface.
 - Use `DESIGN.md` as the source for visual tokens, component styling, tree canvas states, motion, and accessibility.
 - Apply the design system as a desktop workbench, not as a marketing page: no default landing hero, no oversized workspace typography, and no decorative visuals that reduce information density.
@@ -98,7 +100,7 @@ When implementing UI:
 
 When implementing persistence:
 
-- Store canonical messages and node metadata separately from generated summaries.
+- Store canonical node content, references, and node metadata separately from generated summaries.
 - Store merge/source provenance.
 - Do not hard-delete complex user data without confirmation.
 - Keep migrations explicit and documented.
@@ -108,7 +110,7 @@ When implementing web fetch/search:
 - Treat web results as external sources.
 - Show URL/title/fetch time.
 - Do not add fetched text to node summaries or embeddings until the user confirms.
-- Make failures visible without blocking local conversation.
+- Make failures visible without blocking local work.
 
 ## Review Checklist
 
@@ -117,7 +119,7 @@ Use this checklist for any product or code change:
 - Does the current node still ignore sibling branches by default?
 - Can the user inspect why a piece of context was included?
 - Does temporary work branch instead of polluting the current node?
-- Are summaries refreshable from source messages?
+- Are summaries refreshable from source content and references?
 - Are destructive operations confirmed?
 - Does the UI still make the whole tree visible and navigable?
 - Does the change avoid adding accounts/cloud/team complexity to MVP?

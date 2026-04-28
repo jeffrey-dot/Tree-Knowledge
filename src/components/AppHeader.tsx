@@ -32,7 +32,7 @@ export function AppHeader({
   onSearchChange,
 }: AppHeaderProps) {
   return (
-    <header className="grid grid-cols-[minmax(220px,0.85fr)_minmax(220px,1fr)_auto] items-center gap-3 border-b border-[#dad4c8] bg-[#faf9f7]/[0.92] px-3.5 py-2 backdrop-blur-[12px] max-[980px]:grid-cols-[minmax(0,1fr)_auto] max-[980px]:items-start max-[680px]:grid-cols-1 max-[680px]:px-3">
+    <header className="grid grid-cols-[minmax(220px,0.85fr)_minmax(220px,1fr)_auto] items-center gap-3 border-b border-[#dad4c8] bg-[#faf9f7]/[0.92] px-3.5 py-2 backdrop-blur-[12px] max-[980px]:grid-cols-[minmax(0,1fr)_max-content] max-[980px]:items-start max-[680px]:px-3">
       <div className="flex min-w-0 items-center gap-2.5">
         {isWorkspaceView ? (
           <button
@@ -64,7 +64,7 @@ export function AppHeader({
       <label
         className={cx(
           "flex h-[38px] min-w-0 items-center gap-2 rounded-full border border-[#dad4c8] bg-white px-3",
-          "max-[980px]:order-3 max-[980px]:col-span-2 max-[680px]:order-2 max-[680px]:col-span-1",
+          "max-[980px]:order-3 max-[980px]:col-span-2",
           clayShadow,
         )}
         aria-label="搜索知识库"
@@ -85,7 +85,7 @@ export function AppHeader({
         )}
       </label>
 
-      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 max-[680px]:order-3 max-[680px]:justify-start">
+      <div className="flex min-w-max shrink-0 flex-nowrap items-center justify-end gap-2">
         {appView === "library" ? (
           <button
             className={iconButtonClass}

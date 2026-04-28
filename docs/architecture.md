@@ -21,7 +21,6 @@ Responsible for:
 
 - tree canvas,
 - node detail panel,
-- conversation composer,
 - context preview,
 - search UI,
 - web fetch/search UI,
@@ -54,7 +53,7 @@ Responsible for:
 
 Responsible for:
 
-- chunking messages and references,
+- chunking node content and references,
 - embedding storage,
 - scoped search,
 - rank ordering by current node and parent chain priority.
@@ -91,20 +90,20 @@ type ContextNode = {
   summary: string;
   userGoal: string | null;
   sortOrder: number;
-  createdFromMessageId: string | null;
+  createdFromNodeId: string | null;
+  sourcePrompt: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
   deletedAt: string | null;
 };
 
-type Message = {
+type NodeContent = {
   id: string;
   nodeId: string;
-  role: "user" | "assistant" | "system" | "tool";
   content: string;
+  version: number;
   createdAt: string;
-  sourceMessageId: string | null;
 };
 
 type NodeSummary = {
@@ -112,7 +111,7 @@ type NodeSummary = {
   nodeId: string;
   summary: string;
   version: number;
-  generatedFromMessageId: string | null;
+  generatedFromContentVersion: number | null;
   createdAt: string;
 };
 
@@ -120,7 +119,7 @@ type NodeMerge = {
   id: string;
   sourceNodeId: string;
   targetNodeId: string;
-  mode: "summary-only" | "summary-and-key-messages";
+  mode: "summary-only" | "summary-and-key-content";
   createdAt: string;
 };
 
@@ -137,7 +136,7 @@ type WebSource = {
 
 type VectorChunk = {
   id: string;
-  ownerType: "message" | "node-summary" | "web-source";
+  ownerType: "node-content" | "node-summary" | "web-source";
   ownerId: string;
   nodeId: string | null;
   text: string;
@@ -158,7 +157,7 @@ type ContextBuildOptions = {
 type CompiledContext = {
   nodeId: string;
   sourceItems: Array<{
-    type: "summary" | "message" | "retrieval-hit" | "web-source";
+    type: "summary" | "node-content" | "retrieval-hit" | "web-source";
     ownerId: string;
     nodeId: string | null;
     label: string;
@@ -172,15 +171,15 @@ async function buildContext(
   options: ContextBuildOptions
 ): Promise<CompiledContext>;
 
-async function createBranchFromMessage(
-  messageId: string,
+async function createBranchFromNode(
+  nodeId: string,
   title?: string
 ): Promise<ContextNode>;
 
 async function mergeNode(
   sourceNodeId: string,
   targetNodeId: string,
-  mode: "summary-only" | "summary-and-key-messages"
+  mode: "summary-only" | "summary-and-key-content"
 ): Promise<void>;
 
 async function refreshNodeSummary(nodeId: string): Promise<NodeSummary>;
@@ -193,13 +192,13 @@ async function searchKnowledge(
 
 ## Main Runtime Flows
 
-### Send Message
+### Generate Or Update Node Content
 
-1. Save user message to current node.
+1. User requests generation or refinement for the current node.
 2. Build context using root, parent chain, current node, and explicit selected sources.
 3. Show or store context preview metadata.
 4. Send request to configured chat model.
-5. Save assistant response.
+5. Save generated node content as a new content version.
 6. Refresh summary if needed.
 7. Run completion classifier.
 8. Show next-node suggestions if confidence is high.
@@ -212,13 +211,13 @@ async function searchKnowledge(
 4. Switch to new node.
 5. Keep original node unchanged.
 
-### Create Branch From Message
+### Create Branch From Selected Topic
 
-1. User selects a message.
-2. Create child node under that message's node.
-3. Store `createdFromMessageId`.
-4. Optionally copy the selected message as the new node's opening reference.
-5. Continue conversation inside the new node.
+1. User writes or selects a topic/reference.
+2. Create child node under the current node.
+3. Store the source node and optional source prompt.
+4. Optionally copy the selected source as the new node's opening reference.
+5. Generate or refine content inside the new node.
 
 ### Web Fetch/Search
 

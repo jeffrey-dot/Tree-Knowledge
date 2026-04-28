@@ -14,7 +14,7 @@ Acceptance:
 
 - app opens to the working surface,
 - repository has documented setup commands,
-- initial migrations create tree/node/message/summary tables.
+- initial migrations create tree/node/node-content/summary tables.
 
 ## Milestone 2: Tree And Node Operations
 
@@ -34,20 +34,20 @@ Acceptance:
 - no folder-based navigation is required,
 - current node and parent chain are visually obvious.
 
-## Milestone 3: Local Conversation And Context Assembly
+## Milestone 3: Scoped Generation And Context Assembly
 
 Deliver:
 
 - OpenAI-compatible model settings,
-- node-local message history,
-- send message from current node,
+- node-scoped content generation,
+- update generated content from the current node,
 - deterministic context builder,
 - context preview panel.
 
 Acceptance:
 
-- child node conversations inherit root and parent-chain summaries,
-- sibling node messages are excluded by default,
+- child node generation inherits root and parent-chain summaries,
+- sibling node content is excluded by default,
 - context preview shows included and excluded sources.
 
 ## Milestone 4: Summaries And Branching
@@ -57,14 +57,13 @@ Deliver:
 - auto node summary generation,
 - manual summary refresh,
 - create branch from node,
-- create branch from message,
 - temporary question branch action.
 
 Acceptance:
 
 - summaries are regenerated from source data,
-- branch created from message records provenance,
-- temporary question does not add messages to the original node.
+- branch created from a typed question records provenance,
+- temporary question does not mutate the original node content.
 
 ## Milestone 5: Retrieval
 
@@ -104,7 +103,7 @@ Acceptance:
 The MVP is complete when:
 
 - a user can manage a long-running project as a visible tree,
-- any node can continue its own conversation,
+- any node can be reopened and refined with its own scoped context,
 - the LLM context boundary is inspectable,
 - sibling branches are excluded by default,
 - useful side-branch results can be merged back deliberately,

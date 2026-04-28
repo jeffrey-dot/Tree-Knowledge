@@ -2,12 +2,12 @@
 
 ## Summary
 
-Tree Knowledge is a local-first desktop app for managing LLM conversations and knowledge as a visible tree of contexts.
+Tree Knowledge is a local-first desktop app for managing LLM-assisted knowledge and context as a visible tree.
 
 The product solves three recurring failures in web-based LLM chat:
 
 - Important context becomes hard to find in long linear threads.
-- Temporary questions pollute the main conversation.
+- Temporary questions pollute the main working context.
 - Unrelated work gets mixed into one context window and degrades future answers.
 
 Tree Knowledge replaces the linear chat mental model with a tree: each node is a scoped semantic context, and each branch represents a deliberate direction of thought.
@@ -42,7 +42,7 @@ A node is an independent semantic context. It may represent:
 - a research direction,
 - a decision branch.
 
-Each node owns its messages, summary, status, references, and retrieval chunks.
+Each node owns its content, summary, status, references, and retrieval chunks.
 
 ### Parent Chain
 
@@ -50,7 +50,7 @@ The path from the root node to the current node. This is the only inherited cont
 
 ### Branch
 
-A child node created from a node or a specific message. Branching is the default way to handle temporary or divergent work.
+A child node created from a node, typed question, or selected source. Branching is the default way to handle temporary or divergent work.
 
 ### Node Summary
 
@@ -66,9 +66,7 @@ The MVP must support:
 
 - create a knowledge tree,
 - create, rename, archive, delete, and merge nodes,
-- continue a conversation from any node,
 - create a child branch from any node,
-- create a branch from any message,
 - auto-generate and manually refresh node summaries,
 - search current node, parent chain, and global knowledge,
 - inspect the exact context sent to the LLM,
@@ -88,6 +86,7 @@ The MVP must support:
 ## Non-Goals For MVP
 
 - Cloud sync.
+- Per-node chat transcript/message history.
 - Team workspaces.
 - Multi-user permissions.
 - Real-time collaboration.
@@ -104,5 +103,5 @@ The first version is successful when a user can run a long project with multiple
 - Where am I in the knowledge tree?
 - What context will the LLM see?
 - Which branch owns this temporary question?
-- How do I continue from any previous node?
+- How do I resume work from any previous node?
 - How do I merge useful results back into the main line?

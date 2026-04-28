@@ -12,13 +12,13 @@ No sibling node, uncle node, cousin node, archived node, or unrelated branch may
 
 ## Context Assembly Order
 
-When sending a message from a current node, assemble context in this order:
+When building context for an LLM action at a current node, assemble context in this order:
 
 1. system rules,
 2. root node summary,
 3. parent-chain summaries from root to direct parent,
 4. current node summary,
-5. recent current-node messages,
+5. current node content and references,
 6. retrieval results from current node,
 7. retrieval results from parent chain,
 8. explicitly selected global or web results.
@@ -29,7 +29,7 @@ Every included item should carry source metadata so the user can inspect why it 
 
 Supported scopes:
 
-- `current`: messages, summary, references, and chunks owned by the current node.
+- `current`: content, summary, references, and chunks owned by the current node.
 - `ancestor`: parent-chain nodes only.
 - `global`: all non-deleted nodes and confirmed sources.
 - `web`: explicit web fetch/search results.
@@ -52,10 +52,9 @@ Create a child branch when:
 - the user asks a temporary question,
 - the user explores an alternative,
 - the topic diverges from the current task,
-- the user creates a branch from a message,
 - the assistant recommends splitting a thread.
 
-Branch creation from a message must record `createdFromMessageId`. The new branch starts with inherited parent-chain summaries but owns its future messages independently.
+Branch creation must record the source node and optional typed question or selected source. The new branch starts with inherited parent-chain summaries but owns its future content independently.
 
 ## Summary Rules
 
@@ -71,14 +70,14 @@ Each node summary should include:
 
 Summaries are derived state:
 
-- They can be regenerated from messages and references.
+- They can be regenerated from node content and references.
 - They must not be the only source of truth.
 - They should not silently include sibling-branch content.
 - They should not include unconfirmed web results.
 
 Summary refresh triggers:
 
-- after a meaningful assistant response,
+- after a meaningful generated-content update,
 - after merge,
 - after user edits the node goal/title,
 - after confirmed web/reference import,
@@ -91,7 +90,7 @@ Node merge is explicit and provenance-preserving.
 Supported MVP merge modes:
 
 - `summary-only`: append a generated merge note from the source node into the target node.
-- `summary-and-key-messages`: also copy selected source messages into the target as referenced imported messages.
+- `summary-and-key-content`: also copy selected source content into the target as referenced imported content.
 
 After merge:
 
@@ -141,10 +140,10 @@ Completion suggestions are advisory only:
 
 ## Context Preview
 
-Before or after each send, the user must be able to inspect:
+Before or after each LLM action, the user must be able to inspect:
 
 - summaries included,
-- messages included,
+- node content included,
 - retrieval hits included,
 - web/global sources included,
 - token estimate,
