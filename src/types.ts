@@ -21,7 +21,7 @@ export type TreeNode = {
 };
 
 export type NodeDetailMock = {
-  content: string[];
+  content: string;
 };
 
 export type RetrievalHit = {

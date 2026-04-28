@@ -1,4 +1,13 @@
-import { type PointerEvent, type WheelEvent, useMemo, useRef, useState } from "react";
+import {
+  type PointerEvent,
+  type ReactNode,
+  type WheelEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Eye,
   FileText,
@@ -194,11 +203,7 @@ function createSuggestedTreeNode(
 
 function createSuggestedNodeDetail(suggestion: SuggestedNode, parent: TreeNode): NodeDetailMock {
   return {
-    content: [
-      `这个主题由「${suggestion.goal}」生成，已经从「${parent.title}」拆成独立子节点。`,
-      "主要内容应该在这里沉淀成一段可复用的结论，而不是继续在原节点里追问。真实接入 LLM 后，这里会显示模型针对该主题生成的正文；当前 mock 先用于验证：提问会生成卡片，卡片打开后只呈现主题内容。",
-      "这个节点仍然继承根节点和父链背景，但它自己的内容只属于这个分支。父节点不会自动读取这里的内容。",
-    ],
+    content: `## ${suggestion.title}\n\n这个主题由「${suggestion.goal}」生成，已经从「${parent.title}」拆成独立子节点。\n\n主要内容应该在这里沉淀成一段可复用的结论，而不是继续在原节点里追问。真实接入 LLM 后，这里会显示模型针对该主题生成的正文；当前 mock 先用于验证：提问会生成卡片，卡片打开后只呈现主题内容。\n\n- 继承根节点和父链背景\n- 内容只属于当前分支\n- 父节点不会自动读取这里的内容`,
   };
 }
 
@@ -221,12 +226,72 @@ function createCustomSuggestedNode(input: string): SuggestedNode | null {
 
 function getFallbackNodeDetail(node: TreeNode): NodeDetailMock {
   return {
-    content: [
-      node.summary,
-      "这个节点还没有更完整的正文 mock。真实版本会在创建节点时保存生成内容，并在这里直接展示主题正文。",
-    ],
+    content: `${node.summary}\n\n这个节点还没有更完整的正文 mock。真实版本会在创建节点时保存生成内容，并在这里直接展示主题正文。`,
   };
 }
+
+const markdownComponents = {
+  h1: ({ children }: { children?: ReactNode }) => (
+    <h1 className="mb-3 mt-0 text-2xl font-semibold leading-tight text-black">
+      {children}
+    </h1>
+  ),
+  h2: ({ children }: { children?: ReactNode }) => (
+    <h2 className="mb-3 mt-5 text-xl font-semibold leading-tight text-black first:mt-0">
+      {children}
+    </h2>
+  ),
+  h3: ({ children }: { children?: ReactNode }) => (
+    <h3 className="mb-2 mt-4 text-base font-semibold leading-snug text-black">
+      {children}
+    </h3>
+  ),
+  p: ({ children }: { children?: ReactNode }) => (
+    <p className="my-3 text-sm leading-[1.65] text-black">{children}</p>
+  ),
+  strong: ({ children }: { children?: ReactNode }) => (
+    <strong className="font-bold text-black">{children}</strong>
+  ),
+  ul: ({ children }: { children?: ReactNode }) => (
+    <ul className="my-3 list-disc space-y-1.5 pl-5 text-sm leading-[1.6] text-black">
+      {children}
+    </ul>
+  ),
+  ol: ({ children }: { children?: ReactNode }) => (
+    <ol className="my-3 list-decimal space-y-1.5 pl-5 text-sm leading-[1.6] text-black">
+      {children}
+    </ol>
+  ),
+  li: ({ children }: { children?: ReactNode }) => <li>{children}</li>,
+  blockquote: ({ children }: { children?: ReactNode }) => (
+    <blockquote className="my-3 border-l-4 border-[#fbbd41] bg-[#fff8e5] py-2 pl-3 pr-2 text-sm text-[#55534e]">
+      {children}
+    </blockquote>
+  ),
+  code: ({ children }: { children?: ReactNode }) => (
+    <code className="rounded bg-[#eee9df] px-1 py-0.5 font-mono text-[13px] text-black">
+      {children}
+    </code>
+  ),
+  pre: ({ children }: { children?: ReactNode }) => (
+    <pre className="my-3 overflow-auto rounded-lg border border-[#dad4c8] bg-[#faf9f7] p-3 font-mono text-[13px] leading-relaxed text-black">
+      {children}
+    </pre>
+  ),
+  table: ({ children }: { children?: ReactNode }) => (
+    <div className="my-3 overflow-auto rounded-lg border border-[#dad4c8]">
+      <table className="w-full border-collapse text-left text-sm">{children}</table>
+    </div>
+  ),
+  th: ({ children }: { children?: ReactNode }) => (
+    <th className="border-b border-[#dad4c8] bg-[#fff8e5] px-3 py-2 font-semibold">
+      {children}
+    </th>
+  ),
+  td: ({ children }: { children?: ReactNode }) => (
+    <td className="border-b border-[#eee9df] px-3 py-2">{children}</td>
+  ),
+};
 
 function App() {
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>(nodes);
@@ -876,12 +941,10 @@ function NodeDetailDialog({
           </div>
         </div>
 
-        <article className="px-0.5 pb-0.5 pt-1 [&>p+p]:mt-3">
-          {detail.content.map((paragraph) => (
-            <p className="m-0 text-sm leading-[1.6] text-black" key={paragraph}>
-              {paragraph}
-            </p>
-          ))}
+        <article className="px-0.5 pb-0.5 pt-1">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+            {detail.content}
+          </ReactMarkdown>
         </article>
       </section>
     </div>
