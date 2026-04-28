@@ -61,6 +61,7 @@ These rules are more important than implementation convenience:
 - Treat summaries as cached derived state, not the only source of truth.
 - Keep node operations reversible where practical, especially archive and merge.
 - Add abstractions only when they protect product invariants or reduce real duplication.
+- Fix all build, type-check, lint, and test warnings before completing a change unless the warning is explicitly accepted and documented with the reason.
 
 ## Implementation Guidance For Future Agents
 
@@ -119,3 +120,4 @@ Use this checklist for any product or code change:
 - Are destructive operations confirmed?
 - Does the UI still make the whole tree visible and navigable?
 - Does the change avoid adding accounts/cloud/team complexity to MVP?
+- Do build, type-check, lint, and test commands finish without warnings?
