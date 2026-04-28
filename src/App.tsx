@@ -1,0 +1,891 @@
+import { type PointerEvent, type WheelEvent, useMemo, useRef, useState } from "react";
+import {
+  Eye,
+  FileText,
+  GitBranch,
+  Merge,
+  Plus,
+  Search,
+  Settings,
+  Sparkles,
+  X,
+} from "lucide-react";
+import { nodeDetails, nodes } from "./mockData";
+import type { NodeDetailMock, SourceScope, TreeNode } from "./types";
+
+const scopeLabel: Record<SourceScope, string> = {
+  current: "当前",
+  parent: "父链",
+  global: "全局",
+  web: "网页",
+  excluded: "排除",
+};
+
+const statusLabel: Record<TreeNode["status"], string> = {
+  active: "进行中",
+  done: "已完成",
+  archived: "已归档",
+};
+
+const kindLabel: Record<TreeNode["kind"], string> = {
+  root: "根节点",
+  main: "主线",
+  temporary: "临时",
+  research: "研究",
+  decision: "决策",
+};
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+const clayShadow =
+  "shadow-[rgba(0,0,0,0.1)_0_1px_1px,rgba(0,0,0,0.04)_0_-1px_1px_inset,rgba(0,0,0,0.05)_0_-0.5px_1px]";
+const hardShadow = "shadow-[rgb(0,0,0)_-4px_4px_0]";
+const hardShadowHover = "hover:shadow-[rgb(0,0,0)_-4px_4px_0]";
+const eyebrowClass =
+  "text-[11px] font-bold uppercase tracking-[0.08em] text-[#9f9b93]";
+const iconButtonClass = cx(
+  "inline-grid h-[34px] w-[34px] place-items-center rounded-lg border border-[#dad4c8] bg-white text-black",
+  "transition-[transform,box-shadow] duration-[120ms] ease-[ease] hover:-translate-y-px hover:-rotate-1",
+  hardShadowHover,
+);
+const workspaceButtonClass = cx(
+  "inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-[#dad4c8] bg-white px-2.5 text-[13px] font-bold text-black",
+  "transition-[transform,box-shadow,background-color] duration-[120ms] ease-[ease] hover:-translate-y-px hover:-rotate-1",
+  hardShadowHover,
+);
+const nodeBadgeClass =
+  "inline-flex items-center gap-[3px] rounded-full border border-[#eee9df] bg-[#faf9f7] px-1.5 py-[3px] text-[11px] font-bold text-[#55534e]";
+const smallPillClass =
+  "inline-flex w-fit items-center rounded-full px-[7px] py-[3px] text-[10px] font-extrabold uppercase leading-none";
+
+function getScopeBadgeClass(scope: SourceScope) {
+  return cx(
+    smallPillClass,
+    scope === "current" && "bg-[#84e7a5]",
+    scope === "parent" && "bg-[#f8cc65]",
+    scope === "global" && "bg-[#01418d] text-white",
+    scope === "web" && "bg-[#43089f] text-white",
+    scope === "excluded" && "bg-[#eee9df] text-[#55534e]",
+  );
+}
+
+function getSuggestedNodeClass(kind: TreeNode["kind"]) {
+  return cx(
+    "block w-full rounded-lg border border-dashed border-[#dad4c8] bg-[#fff8e5] p-[9px] text-left text-black",
+    "transition-[transform,box-shadow] duration-[120ms] ease-[ease] hover:-translate-y-px",
+    hardShadowHover,
+    kind === "temporary" && "border-[#0089ad] bg-[#f0fbff]",
+    kind === "research" && "border-[#c1b0ff] bg-[#f6f1ff]",
+    kind === "decision" && "border-[#fc7981] bg-[#fff5f5]",
+  );
+}
+
+type SuggestedNode = {
+  title: string;
+  goal: string;
+  kind: TreeNode["kind"];
+};
+
+function getParentChain(node: TreeNode, allNodes: TreeNode[]) {
+  const byId = new Map(allNodes.map((item) => [item.id, item]));
+  const chain: TreeNode[] = [];
+  let cursor: TreeNode | undefined = node;
+
+  while (cursor) {
+    chain.unshift(cursor);
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+  }
+
+  return chain;
+}
+
+function getSuggestedNodes(node: TreeNode): SuggestedNode[] {
+  if (node.id === "ui") {
+    return [
+      {
+        title: "交互弹窗规范",
+        goal: "把节点详情、摘要和检索都收敛到点击后的弹窗中。",
+        kind: "main",
+      },
+      {
+        title: "悬浮展开交互",
+        goal: "悬浮节点时展示可继续拆分的推荐主题。",
+        kind: "temporary",
+      },
+    ];
+  }
+
+  if (node.id === "context") {
+    return [
+      {
+        title: "父链裁剪策略",
+        goal: "定义长父链下摘要如何分层压缩。",
+        kind: "research",
+      },
+      {
+        title: "跨分支引用确认",
+        goal: "设计其他分支内容进入当前上下文前的确认流程。",
+        kind: "decision",
+      },
+    ];
+  }
+
+  if (node.status === "archived") {
+    return [
+      {
+        title: "恢复归档评估",
+        goal: "判断该归档主题是否值得重新进入当前主线。",
+        kind: "decision",
+      },
+    ];
+  }
+
+  return [
+    {
+      title: `${node.title} 的下一步`,
+      goal: "把当前主题拆成一个可独立推进的子问题。",
+      kind: "main",
+    },
+    {
+      title: "临时探索",
+      goal: "开一个不会污染主线的旁路探索分支。",
+      kind: "temporary",
+    },
+  ];
+}
+
+function getAvailableSuggestedNodes(node: TreeNode, allNodes: TreeNode[]) {
+  const existingChildTitles = new Set(
+    allNodes
+      .filter((candidate) => candidate.parentId === node.id)
+      .map((candidate) => candidate.title),
+  );
+
+  return getSuggestedNodes(node).filter(
+    (suggestion) => !existingChildTitles.has(suggestion.title),
+  );
+}
+
+function createSuggestedTreeNode(
+  parent: TreeNode,
+  suggestion: SuggestedNode,
+  siblingCount: number,
+): TreeNode {
+  const id = `suggested-${parent.id}-${Date.now()}`;
+
+  return {
+    id,
+    parentId: parent.id,
+    title: suggestion.title,
+    goal: suggestion.goal,
+    summary: `围绕「${suggestion.title}」整理出的独立主题，不写回父节点。`,
+    status: "active",
+    kind: suggestion.kind,
+    x: parent.x + 290,
+    y: parent.y + 80 + siblingCount * 140,
+    materials: 0,
+    references: 0,
+    webSources: 0,
+    merged: 0,
+  };
+}
+
+function createSuggestedNodeDetail(suggestion: SuggestedNode, parent: TreeNode): NodeDetailMock {
+  return {
+    content: [
+      `这个主题由「${suggestion.goal}」生成，已经从「${parent.title}」拆成独立子节点。`,
+      "主要内容应该在这里沉淀成一段可复用的结论，而不是继续在原节点里追问。真实接入 LLM 后，这里会显示模型针对该主题生成的正文；当前 mock 先用于验证：提问会生成卡片，卡片打开后只呈现主题内容。",
+      "这个节点仍然继承根节点和父链背景，但它自己的内容只属于这个分支。父节点不会自动读取这里的内容。",
+    ],
+  };
+}
+
+function createCustomSuggestedNode(input: string): SuggestedNode | null {
+  const normalized = input.trim().replace(/\s+/g, " ");
+  if (!normalized) return null;
+
+  const title = normalized
+    .split(/[。！？.!?\n]/)[0]
+    .replace(/^(我想|帮我|请|能不能|是否|问题|主题)/, "")
+    .trim()
+    .slice(0, 18);
+
+  return {
+    title: title || "自定义问题",
+    goal: normalized,
+    kind: "temporary",
+  };
+}
+
+function getFallbackNodeDetail(node: TreeNode): NodeDetailMock {
+  return {
+    content: [
+      node.summary,
+      "这个节点还没有更完整的正文 mock。真实版本会在创建节点时保存生成内容，并在这里直接展示主题正文。",
+    ],
+  };
+}
+
+function App() {
+  const [treeNodes, setTreeNodes] = useState<TreeNode[]>(nodes);
+  const [nodeDetailMap, setNodeDetailMap] =
+    useState<Record<string, NodeDetailMock>>(nodeDetails);
+  const [activeNodeId, setActiveNodeId] = useState("ui");
+  const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
+  const [showContext, setShowContext] = useState(false);
+
+  const activeNode = treeNodes.find((node) => node.id === activeNodeId) ?? treeNodes[0];
+  const detailNode = detailNodeId
+    ? treeNodes.find((node) => node.id === detailNodeId)
+    : null;
+  const parentChain = useMemo(
+    () => getParentChain(activeNode, treeNodes),
+    [activeNode, treeNodes],
+  );
+  const parentChainIds = new Set(parentChain.map((node) => node.id));
+
+  function handleSelectNode(nodeId: string) {
+    setActiveNodeId(nodeId);
+    setDetailNodeId(nodeId);
+  }
+
+  function handleCreateSuggestedNode(parentId: string, suggestion: SuggestedNode) {
+    const parent = treeNodes.find((node) => node.id === parentId);
+    if (!parent) return;
+
+    const siblingCount = treeNodes.filter((node) => node.parentId === parent.id).length;
+    const nextNode = createSuggestedTreeNode(parent, suggestion, siblingCount);
+    setTreeNodes((currentNodes) => [...currentNodes, nextNode]);
+    setNodeDetailMap((currentDetails) => ({
+      ...currentDetails,
+      [nextNode.id]: createSuggestedNodeDetail(suggestion, parent),
+    }));
+    setActiveNodeId(nextNode.id);
+    setDetailNodeId(nextNode.id);
+  }
+
+  return (
+    <div className="grid h-screen min-h-0 grid-rows-[56px_1fr] overflow-hidden max-[760px]:h-auto max-[760px]:min-h-screen max-[760px]:overflow-visible">
+      <header className="grid grid-cols-[minmax(270px,360px)_minmax(260px,1fr)_auto] items-center gap-[18px] border-b border-[#dad4c8] bg-[#faf9f7]/[0.92] px-3.5 py-2 backdrop-blur-[12px] max-[760px]:h-auto max-[760px]:grid-cols-1">
+        <div className="flex items-center gap-2.5">
+          <div
+            className={cx(
+              "grid h-9 w-9 place-items-center rounded-lg border border-[#dad4c8] bg-[#fbbd41]",
+              clayShadow,
+            )}
+          >
+            <GitBranch size={18} aria-hidden="true" />
+          </div>
+          <div>
+            <div className={eyebrowClass}>本地模拟工作台</div>
+            <h1 className="m-0 text-2xl leading-[1.2] tracking-[0]">树形知识库</h1>
+          </div>
+        </div>
+
+        <label
+          className={cx(
+            "flex h-[38px] items-center gap-2 rounded-full border border-[#dad4c8] bg-white px-3",
+            clayShadow,
+          )}
+          aria-label="搜索知识库"
+        >
+          <Search size={16} aria-hidden="true" />
+          <input className="w-full border-0 bg-transparent text-black outline-0" defaultValue="上下文边界" />
+        </label>
+
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#dad4c8] bg-white px-2.5 py-[7px] text-xs font-semibold text-[#55534e]">
+            <Sparkles size={14} aria-hidden="true" />
+            OpenAI 兼容接口待接入
+          </span>
+          <button className={iconButtonClass} aria-label="设置">
+            <Settings size={17} />
+          </button>
+        </div>
+      </header>
+
+      <main className="relative block min-h-0 overflow-hidden max-[760px]:min-h-[1200px]">
+        <section
+          className="relative h-full min-w-0 overflow-hidden max-[760px]:overflow-visible"
+          aria-label="知识树画布"
+        >
+          <CanvasToolbar
+            parentChain={parentChain}
+            onToggleContext={() => setShowContext((value) => !value)}
+          />
+          <TreeCanvas
+            nodes={treeNodes}
+            activeNodeId={activeNode.id}
+            parentChainIds={parentChainIds}
+            onCreateSuggestedNode={handleCreateSuggestedNode}
+            onSelectNode={handleSelectNode}
+          />
+          {showContext ? (
+            <ContextPreview activeNode={activeNode} parentChain={parentChain} />
+          ) : null}
+          {detailNode ? (
+            <NodeDetailDialog
+              detailMap={nodeDetailMap}
+              node={detailNode}
+              onClose={() => setDetailNodeId(null)}
+            />
+          ) : null}
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function CanvasToolbar({
+  parentChain,
+  onToggleContext,
+}: {
+  parentChain: TreeNode[];
+  onToggleContext: () => void;
+}) {
+  return (
+    <div
+      className={cx(
+        "absolute left-4 right-4 top-3.5 z-[5] flex items-center justify-between gap-4 rounded-xl border border-[#dad4c8] bg-white/[0.88] p-3 backdrop-blur-[10px]",
+        "max-[760px]:static max-[760px]:m-3 max-[760px]:w-auto",
+        clayShadow,
+      )}
+    >
+      <div>
+        <div className={eyebrowClass}>当前父链</div>
+        <div className="mt-[3px] text-sm font-bold text-black">
+          {parentChain.map((node, index) => (
+            <span key={node.id}>
+              {index > 0 ? " / " : ""}
+              {node.title}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button className={workspaceButtonClass} type="button" onClick={onToggleContext}>
+          <Eye size={15} />
+          上下文
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TreeCanvas({
+  nodes,
+  activeNodeId,
+  parentChainIds,
+  onCreateSuggestedNode,
+  onSelectNode,
+}: {
+  nodes: TreeNode[];
+  activeNodeId: string;
+  parentChainIds: Set<string>;
+  onCreateSuggestedNode: (parentId: string, suggestion: SuggestedNode) => void;
+  onSelectNode: (nodeId: string) => void;
+}) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [customSuggestion, setCustomSuggestion] = useState("");
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panGesture = useRef<{
+    pointerId: number;
+    originX: number;
+    originY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+  const hoveredNode = hoveredNodeId
+    ? nodes.find((node) => node.id === hoveredNodeId)
+    : null;
+  const stageSize = useMemo(
+    () =>
+      nodes.reduce(
+        (size, node) => ({
+          width: Math.max(size.width, node.x + 560),
+          height: Math.max(size.height, node.y + 320),
+        }),
+        { width: 1500, height: 900 },
+      ),
+    [nodes],
+  );
+
+  function isInteractivePanTarget(target: EventTarget | null) {
+    if (!(target instanceof Element)) return false;
+
+    return Boolean(
+      target.closest("button, input, textarea, a, [data-pan-lock]"),
+    );
+  }
+
+  function isWheelLockedTarget(target: EventTarget | null) {
+    if (!(target instanceof Element)) return false;
+
+    return Boolean(target.closest("input, textarea, [data-wheel-lock]"));
+  }
+
+  function handleCanvasPointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0 || isInteractivePanTarget(event.target)) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panGesture.current = {
+      pointerId: event.pointerId,
+      originX: event.clientX,
+      originY: event.clientY,
+      startX: pan.x,
+      startY: pan.y,
+    };
+    setHoveredNodeId(null);
+    setIsPanning(true);
+  }
+
+  function handleCanvasPointerMove(event: PointerEvent<HTMLDivElement>) {
+    const gesture = panGesture.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+    setPan({
+      x: gesture.startX + event.clientX - gesture.originX,
+      y: gesture.startY + event.clientY - gesture.originY,
+    });
+  }
+
+  function endCanvasPan(event: PointerEvent<HTMLDivElement>) {
+    const gesture = panGesture.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    panGesture.current = null;
+    setIsPanning(false);
+  }
+
+  function handleCanvasWheel(event: WheelEvent<HTMLDivElement>) {
+    if (isWheelLockedTarget(event.target)) return;
+
+    event.preventDefault();
+    setPan((currentPan) => ({
+      x: currentPan.x - event.deltaX,
+      y: currentPan.y - event.deltaY,
+    }));
+  }
+
+  function handleCreateCustomSuggestion(nodeId: string, input = customSuggestion) {
+    const suggestion = createCustomSuggestedNode(input);
+    if (!suggestion) return;
+
+    onCreateSuggestedNode(nodeId, suggestion);
+    setCustomSuggestion("");
+    setHoveredNodeId(null);
+  }
+
+  return (
+    <div
+      className={cx(
+        "absolute inset-0 cursor-grab overflow-hidden touch-none max-[760px]:relative max-[760px]:h-[720px] max-[760px]:overflow-auto",
+        isPanning && "cursor-grabbing select-none [&_*]:cursor-grabbing [&_*]:select-none",
+      )}
+      onMouseLeave={() => setHoveredNodeId(null)}
+      onPointerCancel={endCanvasPan}
+      onPointerDown={handleCanvasPointerDown}
+      onPointerMove={handleCanvasPointerMove}
+      onPointerUp={endCanvasPan}
+      onWheel={handleCanvasWheel}
+    >
+      <div
+        className="absolute left-0 top-0 origin-top-left will-change-transform"
+        style={{
+          width: stageSize.width,
+          height: stageSize.height,
+          transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`,
+        }}
+      >
+        <svg
+          className="pointer-events-none absolute left-7 top-[86px]"
+          viewBox={`0 0 ${stageSize.width} ${stageSize.height}`}
+          aria-hidden="true"
+          style={{ width: stageSize.width, height: stageSize.height }}
+        >
+          {nodes
+            .filter((node) => node.parentId)
+            .map((node) => {
+              const parent = byId.get(node.parentId!);
+              if (!parent) return null;
+
+              const isActiveEdge =
+                parentChainIds.has(node.id) && parentChainIds.has(parent.id);
+              const isTemporary = node.kind === "temporary";
+              const startX = parent.x + 220;
+              const startY = parent.y + 52;
+              const endX = node.x;
+              const endY = node.y + 52;
+              const midX = startX + (endX - startX) / 2;
+
+              return (
+                <path
+                  key={`${parent.id}-${node.id}`}
+                  className={cx(
+                    "fill-none stroke-[#dad4c8] stroke-[1.5]",
+                    isActiveEdge && "stroke-[#fbbd41] stroke-[3]",
+                    isTemporary && "[stroke-dasharray:8_7] stroke-[#0089ad]",
+                  )}
+                  d={`M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`}
+                />
+              );
+            })}
+        </svg>
+
+        {nodes.map((node) => (
+          <button
+            className={cx(
+              "absolute min-h-[108px] w-[220px] rounded-lg border border-[#dad4c8] bg-white/[0.92] p-3 text-left text-black",
+              "transition-[transform,box-shadow,border-color,opacity] duration-[140ms] ease-[ease] hover:-translate-y-0.5",
+              hardShadowHover,
+              node.id === activeNodeId && "border-2 border-black bg-white",
+              parentChainIds.has(node.id) &&
+                node.id !== activeNodeId &&
+                "border-[#fbbd41] bg-[#fff8e5]",
+              node.kind === "temporary" && "border-dashed",
+              node.status === "archived" && "opacity-[0.45]",
+              clayShadow,
+            )}
+            key={node.id}
+            style={{ left: node.x, top: node.y }}
+            type="button"
+            onMouseEnter={() => setHoveredNodeId(node.id)}
+            onFocus={() => setHoveredNodeId(node.id)}
+            onClick={() => onSelectNode(node.id)}
+          >
+            <div className="mb-2 flex justify-between gap-2">
+              <span className={cx(smallPillClass, "bg-[#eee9df] text-[#55534e]")}>
+                {kindLabel[node.kind]}
+              </span>
+              <span
+                className={cx(
+                  smallPillClass,
+                  "border border-[#dad4c8] bg-white",
+                  node.status === "done" && "bg-[#84e7a5]",
+                )}
+              >
+                {statusLabel[node.status]}
+              </span>
+            </div>
+            <strong className="block text-sm leading-[1.25]">{node.title}</strong>
+            <p className="mb-2.5 mt-[7px] overflow-hidden text-xs leading-[1.35] text-[#55534e] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+              {node.summary}
+            </p>
+            <div className="flex flex-wrap gap-[5px]">
+              <span className={nodeBadgeClass}>
+                <Sparkles size={11} />
+                {node.materials}
+              </span>
+              <span className={nodeBadgeClass}>
+                <FileText size={11} />
+                {node.references}
+              </span>
+              {node.webSources > 0 ? (
+                <span className={nodeBadgeClass}>
+                  <FileText size={11} />
+                  {node.webSources}
+                </span>
+              ) : null}
+              {node.merged > 0 ? (
+                <span className={nodeBadgeClass}>
+                  <Merge size={11} />
+                  {node.merged}
+                </span>
+              ) : null}
+            </div>
+          </button>
+        ))}
+
+        {hoveredNode ? (
+          <SuggestedNodesPopover
+            node={hoveredNode}
+            suggestions={getAvailableSuggestedNodes(hoveredNode, nodes)}
+            customValue={customSuggestion}
+            onCreate={(suggestion) => onCreateSuggestedNode(hoveredNode.id, suggestion)}
+            onCreateCustom={(input) =>
+              handleCreateCustomSuggestion(hoveredNode.id, input)
+            }
+            onCustomChange={setCustomSuggestion}
+            onMouseEnter={() => setHoveredNodeId(hoveredNode.id)}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function SuggestedNodesPopover({
+  customValue,
+  node,
+  onCreate,
+  onCreateCustom,
+  onCustomChange,
+  onMouseEnter,
+  suggestions,
+}: {
+  customValue: string;
+  node: TreeNode;
+  onCreate: (suggestion: SuggestedNode) => void;
+  onCreateCustom: (input?: string) => void;
+  onCustomChange: (value: string) => void;
+  onMouseEnter: () => void;
+  suggestions: SuggestedNode[];
+}) {
+  const customInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const customInputId = `custom-suggestion-${node.id}`;
+
+  function getCustomInputValue() {
+    const domInput = document.getElementById(customInputId);
+
+    if (domInput instanceof HTMLTextAreaElement) {
+      return domInput.value;
+    }
+
+    return customInputRef.current?.value ?? customValue;
+  }
+
+  return (
+    <aside
+      className={cx(
+        "pointer-events-auto absolute z-[4] w-[260px] rounded-[10px] border border-[#dad4c8] bg-white/[0.94] p-2.5 max-[1180px]:w-[240px]",
+        clayShadow,
+      )}
+      data-pan-lock
+      data-wheel-lock
+      style={{ left: node.x + 238, top: node.y - 4 }}
+      aria-label={`${node.title} 的展开面板`}
+      onMouseEnter={onMouseEnter}
+    >
+      <div className="mb-2 flex items-center gap-1.5 text-xs font-extrabold text-[#55534e]">
+        <Sparkles size={14} aria-hidden="true" />
+        展开节点
+      </div>
+      <div className="grid gap-[7px]">
+        {suggestions.map((suggestion) => (
+          <button
+            className={getSuggestedNodeClass(suggestion.kind)}
+            key={suggestion.title}
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              onCreate(suggestion);
+            }}
+            onClick={(event) => {
+              if (event.detail === 0) onCreate(suggestion);
+            }}
+          >
+            <span className="text-[10px] font-extrabold text-[#9f9b93]">
+              {kindLabel[suggestion.kind]}
+            </span>
+            <strong className="my-1 block text-[13px] leading-[1.25]">
+              {suggestion.title}
+            </strong>
+            <p className="m-0 text-xs leading-[1.4] text-[#55534e]">
+              {suggestion.goal}
+            </p>
+          </button>
+        ))}
+        {suggestions.length === 0 ? (
+          <div className="text-xs leading-[1.4] text-[#55534e]">
+            当前没有新的系统推荐方向。
+          </div>
+        ) : null}
+        <div className="grid gap-[7px] rounded-lg border border-dashed border-[#dad4c8] bg-[#fffdf9] p-[9px]">
+          <label className="text-xs font-extrabold text-[#55534e]" htmlFor={customInputId}>
+            提出新问题
+          </label>
+          <textarea
+            className="min-h-[62px] w-full resize-none rounded-lg border border-[#dad4c8] bg-white p-2 text-xs leading-[1.4] text-black"
+            id={customInputId}
+            ref={customInputRef}
+            placeholder="输入你想继续展开的问题..."
+            value={customValue}
+            onChange={(event) => onCustomChange(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                onCreateCustom(event.currentTarget.value);
+              }
+            }}
+          />
+          <button
+            className="inline-flex min-h-7 items-center justify-center gap-[5px] rounded-lg border border-black bg-[#fbbd41] text-xs font-extrabold text-black"
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              onCreateCustom(getCustomInputValue());
+            }}
+            onClick={(event) => {
+              if (event.detail === 0) onCreateCustom(getCustomInputValue());
+            }}
+          >
+            <Plus size={13} />
+            生成节点
+          </button>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function ContextPreview({
+  activeNode,
+  parentChain,
+}: {
+  activeNode: TreeNode;
+  parentChain: TreeNode[];
+}) {
+  const ancestors = parentChain.slice(0, -1);
+
+  return (
+    <div
+      className={cx(
+        "absolute bottom-[18px] right-[18px] z-[6] max-h-[min(360px,calc(100%_-_110px))] w-[min(720px,calc(100%_-_390px))] overflow-auto rounded-xl border border-black bg-white/[0.94] p-3.5",
+        "max-[1180px]:w-[min(680px,calc(100%_-_40px))] max-[760px]:static max-[760px]:m-3 max-[760px]:w-auto",
+        hardShadow,
+      )}
+      data-pan-lock
+      data-wheel-lock
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <div className={eyebrowClass}>提示词上下文预览</div>
+          <h2 className="m-0 text-lg leading-[1.2] tracking-[0]">
+            LLM 将看到的内容
+          </h2>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-[#dad4c8] bg-white px-2.5 py-[7px] text-xs font-semibold text-[#55534e]">
+          约 4.8k token
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5 max-[760px]:grid-cols-1">
+        <ContextGroup
+          scope="parent"
+          title="根节点 + 父链摘要"
+          items={ancestors.map((node) => node.summary)}
+        />
+        <ContextGroup
+          scope="current"
+          title="当前节点"
+          items={[
+            activeNode.summary,
+            "最近的当前节点素材和当前节点检索结果。",
+          ]}
+        />
+        <ContextGroup
+          scope="web"
+          title="已选择的外部来源"
+          items={["1 个已确认网页来源可进入上下文；待确认网页来源被排除。"]}
+        />
+        <ContextGroup
+          scope="excluded"
+          title="按规则排除"
+          items={[
+            "兄弟分支在画布中可见，但不会自动进入上下文。",
+            "已归档的团队同步节点不会进入自动上下文。",
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ContextGroup({
+  scope,
+  title,
+  items,
+}: {
+  scope: SourceScope;
+  title: string;
+  items: string[];
+}) {
+  return (
+    <article className="rounded-lg border border-[#dad4c8] bg-white p-2.5">
+      <span className={getScopeBadgeClass(scope)}>{scopeLabel[scope]}</span>
+      <h3 className="mb-[5px] mt-[7px] text-[13px] leading-[1.25]">{title}</h3>
+      <ul className="m-0 pl-4 [&>li+li]:mt-[5px]">
+        {items.map((item) => (
+          <li className="m-0 text-[13px] leading-[1.45] text-[#55534e]" key={item}>
+            {item}
+          </li>
+        ))}
+      </ul>
+    </article>
+  );
+}
+
+function NodeDetailDialog({
+  detailMap,
+  node,
+  onClose,
+}: {
+  detailMap: Record<string, NodeDetailMock>;
+  node: TreeNode;
+  onClose: () => void;
+}) {
+  const detail = detailMap[node.id] ?? getFallbackNodeDetail(node);
+
+  return (
+    <div
+      className="absolute inset-0 z-20 grid place-items-center bg-[#faf9f7]/[0.28] px-7 pb-[150px] pt-[72px] backdrop-blur-[2px] max-[760px]:fixed max-[760px]:px-3 max-[760px]:py-6"
+      role="presentation"
+      onClick={onClose}
+    >
+      <section
+        className={cx(
+          "max-h-[min(620px,100%)] w-[min(760px,100%)] overflow-auto rounded-xl border border-black bg-white/[0.97] p-4",
+          hardShadow,
+        )}
+        data-pan-lock
+        data-wheel-lock
+        role="dialog"
+        aria-modal="true"
+        aria-label="节点详情"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <span
+              className={getScopeBadgeClass(
+                node.kind === "temporary" ? "web" : "current",
+              )}
+            >
+              {kindLabel[node.kind]}
+            </span>
+            <h2 className="mb-1.5 mt-2 text-2xl leading-[1.2] tracking-[0]">
+              {node.title}
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className={cx(iconButtonClass, "h-[30px] w-[30px]")}
+              aria-label="关闭详情"
+              onClick={onClose}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+
+        <article className="px-0.5 pb-0.5 pt-1 [&>p+p]:mt-3">
+          {detail.content.map((paragraph) => (
+            <p className="m-0 text-sm leading-[1.6] text-black" key={paragraph}>
+              {paragraph}
+            </p>
+          ))}
+        </article>
+      </section>
+    </div>
+  );
+}
+
+export default App;

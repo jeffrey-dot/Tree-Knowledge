@@ -6,10 +6,11 @@ The product exists to solve a specific problem: linear LLM chats make context ha
 
 ## Current Repository State
 
-- The repository is documentation-first at this stage.
-- There is no application scaffold yet.
-- Product and architecture decisions live in `docs/`.
-- When implementation begins, keep this file aligned with the actual codebase.
+- The repository now contains a first-pass mock desktop application.
+- The UI is implemented with Vite, React, TypeScript, and Tauri.
+- Current data is mock-only; there is no SQLite persistence or LLM integration yet.
+- Product and architecture decisions still live in `docs/`.
+- Keep this file aligned as the implementation changes.
 
 ## Non-Negotiable Product Rules
 
@@ -37,8 +38,8 @@ These rules are more important than implementation convenience:
 - Target user: individual knowledge worker.
 - First implementation stack: Tauri + React + SQLite.
 - Data model: local-first.
-- LLM integration: built-in OpenAI-compatible chat and embedding APIs.
-- Primary UI: zoomable tree canvas plus node detail/conversation panel.
+- LLM integration: built-in OpenAI-compatible topic extraction, context assistance, and embedding APIs.
+- Primary UI: full-canvas visual tree workspace with click-to-open node detail dialogs.
 - Web knowledge: explicit user-triggered web search/fetch. Results do not enter durable context unless the user confirms.
 - MVP priority: tree-shaped context correctness before advanced web research or visual polish.
 
@@ -84,6 +85,10 @@ When implementing UI:
 - Do not hide the product behind a folder/file explorer metaphor.
 - Keep current node, parent chain, siblings, archived nodes, and merged sources visually distinguishable.
 - Provide an action to inspect the exact context sent to the LLM.
+- Keep the default workspace focused on the tree. Do not add a persistent right-side node detail panel unless the user explicitly asks for it.
+- Node details, summaries, retrieval hits, and node actions should open in a modal/popover after an explicit user action.
+- Node creation should be topic-first: user conversation or a typed question can summarize into a new child node instead of becoming linear chat clutter.
+- Hover affordances may suggest child topics, but users must also be able to write their own question/topic from the same surface.
 - Use `DESIGN.md` as the source for visual tokens, component styling, tree canvas states, motion, and accessibility.
 - Apply the design system as a desktop workbench, not as a marketing page: no default landing hero, no oversized workspace typography, and no decorative visuals that reduce information density.
 - If `DESIGN.md` conflicts with product invariants, context rules, or long-session usability, the product/context rules win.
