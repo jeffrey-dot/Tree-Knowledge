@@ -121,6 +121,7 @@ const childNodeOffsetY = 80;
 const childNodeVerticalStep = 140;
 const minCanvasZoom = 0.55;
 const maxCanvasZoom = 1.8;
+const canvasZoomStep = 0.05;
 
 function getParentChain(node: TreeNode, allNodes: TreeNode[]) {
   const byId = new Map(allNodes.map((item) => [item.id, item]));
@@ -610,10 +611,9 @@ function TreeCanvas({
   const hoveredNode = hoveredNodeId
     ? nodes.find((node) => node.id === hoveredNodeId)
     : null;
-  const isScaled = Math.abs(zoom - 1) > 0.001;
   const renderedPan = {
-    x: isScaled ? pan.x : Math.round(pan.x),
-    y: isScaled ? pan.y : Math.round(pan.y),
+    x: Math.round(pan.x),
+    y: Math.round(pan.y),
   };
   const stageSize = useMemo(
     () =>
@@ -685,8 +685,13 @@ function TreeCanvas({
     event.preventDefault();
 
     if (event.ctrlKey) {
-      const nextZoom = clamp(
+      const rawNextZoom = clamp(
         zoom * Math.exp(-event.deltaY * 0.0015),
+        minCanvasZoom,
+        maxCanvasZoom,
+      );
+      const nextZoom = clamp(
+        Math.round(rawNextZoom / canvasZoomStep) * canvasZoomStep,
         minCanvasZoom,
         maxCanvasZoom,
       );
@@ -701,8 +706,8 @@ function TreeCanvas({
 
       setZoom(nextZoom);
       setPan({
-        x: pointerX - worldX * nextZoom,
-        y: pointerY - worldY * nextZoom,
+        x: Math.round(pointerX - worldX * nextZoom),
+        y: Math.round(pointerY - worldY * nextZoom),
       });
       return;
     }
@@ -742,16 +747,13 @@ function TreeCanvas({
       onWheel={handleCanvasWheel}
     >
       <div
-        className={cx(
-          "absolute origin-top-left",
-          isScaled && "will-change-transform",
-        )}
+        className="absolute origin-top-left"
         style={{
           width: stageSize.width,
           height: stageSize.height,
           left: renderedPan.x,
           top: renderedPan.y,
-          transform: isScaled ? `scale(${zoom})` : undefined,
+          zoom,
         }}
       >
         <svg
