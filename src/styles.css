@@ -89,6 +89,16 @@ a {
   text-decoration: none;
 }
 
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.35rem 0;
+}
+
+.katex {
+  font-size: 1em;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

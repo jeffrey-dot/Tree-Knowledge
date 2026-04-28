@@ -6,8 +6,11 @@ import {
   useRef,
   useState,
 } from "react";
+import "katex/dist/katex.min.css";
+import rehypeKatex from "rehype-katex";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import {
   Eye,
   FileText,
@@ -996,7 +999,11 @@ function NodeDetailDialog({
 
         <article className="px-0.5 pb-0.5 pt-1" aria-live="polite">
           {detail.content ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeKatex]}
+              components={markdownComponents}
+            >
               {detail.content}
             </ReactMarkdown>
           ) : (
